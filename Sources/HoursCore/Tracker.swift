@@ -75,6 +75,7 @@ public final class Tracker {
         m.registerMigration("v2-idle", migrate: migrateIdle)
         registerMoneyMigration(&m)
         registerManualMigration(&m)
+        registerExportMigration(&m)
         return m
     }
 
