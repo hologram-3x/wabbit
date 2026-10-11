@@ -38,6 +38,10 @@ struct HoursApp: App {
             ExportView(model: model)
         }
 
+        Window("Backup", id: "backup") {
+            BackupView(model: model)
+        }
+
         Window("Watched Apps", id: "watched") {
             WatchedAppsView(model: model)
         }
@@ -85,6 +89,7 @@ final class TrayModel {
     private(set) var watchedPrompt: WatchedAppPrompt?
     private(set) var watchedApps: [WatchedApp] = []
     private(set) var watchedDelaySeconds = 30
+    private(set) var titleRules: [String: [TitleRule]] = [:]
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
@@ -157,6 +162,7 @@ final class TrayModel {
             watchedPrompt = tracker.pendingWatchedAppPrompt()
             watchedApps = try tracker.watchedApps()
             watchedDelaySeconds = Int(try tracker.watchedAppDelay())
+            titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
         }
         updateTick()
         updateMeetingPanel()
@@ -386,6 +392,10 @@ struct TrayView: View {
             }
             Button("Export…") {
                 openWindow(id: "export")
+                NSApplication.shared.activate()
+            }
+            Button("Backup & Restore…") {
+                openWindow(id: "backup")
                 NSApplication.shared.activate()
             }
             Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))

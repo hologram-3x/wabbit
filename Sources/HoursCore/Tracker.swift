@@ -79,6 +79,7 @@ public final class Tracker {
         registerManualMigration(&m)
         registerExportMigration(&m)
         m.registerMigration("v7-watched-apps", migrate: migrateWatchedApps)
+        m.registerMigration("v8-title-rules", migrate: migrateTitleRules)
         return m
     }
 
