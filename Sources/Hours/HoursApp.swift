@@ -91,6 +91,7 @@ final class TrayModel {
     /// Meeting Prompt (ticket 08): see MediaDetection.swift.
     var meetingPrompt: MeetingPrompt?
     var meetingPanel: NSPanel?
+    let calendar = CalendarAccess()
     private var media: MediaDetection?
 
     /// Idle is polled at most every 30 s (footprint budget / ticket 07).

@@ -125,6 +125,11 @@ extension TrayModel {
     func mediaChanged(_ event: DetectionEvent) {
         feed.emit(event)
         refresh()
+        if event == .microphone(on: true) || event == .camera(on: true) {
+            Task { @MainActor in
+                if let e = await calendar.currentEvent() { feed.emit(e); refresh() }
+            }
+        }
         // One-shot re-check when the debounce elapses (not a poll).
         if event == .microphone(on: true) || event == .camera(on: true) {
             DispatchQueue.main.asyncAfter(deadline: .now() + MeetingDebounce.seconds + 0.5) { [weak self] in

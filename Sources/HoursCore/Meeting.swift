@@ -33,6 +33,8 @@ final class MeetingRuntime {
     var answered = false
     /// The Session the "Stop tracking?" offer is about.
     var stopOfferSessionId: Int64?
+    /// The calendar event current for this call (ticket 09). Cleared when the call ends.
+    var calendarEvent: CalendarEvent?
 }
 
 extension Tracker {
@@ -62,10 +64,11 @@ extension Tracker {
         meeting.stopOfferSessionId = nil
     }
 
-    /// The Project the Meeting Prompt suggests. Without other information (calendar: ticket 09),
-    /// the last-used Open Project. The running Project is excluded: a call on it needs no switch.
+    /// The Project the Meeting Prompt suggests: the calendar guess, else the last-used Open Project.
+    /// The running Project is excluded: a call on it needs no switch.
     func meetingSuggestion(excluding runningProjectId: Int64?) throws -> Int64? {
-        try quickStartProjects(limit: .max).first { $0.id != runningProjectId }?.id
+        if let event = meeting.calendarEvent, let id = try calendarGuess(event, excluding: runningProjectId) { return id }
+        return try quickStartProjects(limit: .max).first { $0.id != runningProjectId }?.id
     }
 
     func handleMeetingEvent(_ event: DetectionEvent) {
@@ -73,11 +76,15 @@ extension Tracker {
         switch event {
         case .microphone(let on): meeting.microphoneOn = on
         case .camera(let on): meeting.cameraOn = on
+        case .calendarEventCurrent(let title, let emails):
+            meeting.calendarEvent = CalendarEvent(title: title, attendeeEmails: emails)
+            return
         default: return
         }
         let isOn = meeting.microphoneOn || meeting.cameraOn
         if isOn, !wasOn {
             meeting.callStart = clock.now()
+            meeting.calendarEvent = nil
             meeting.answered = false
             meeting.stopOfferSessionId = nil
         } else if !isOn, wasOn, let callStart = meeting.callStart {
@@ -85,6 +92,7 @@ extension Tracker {
             // until it comes back on. Add an off-debounce if real calls do that.
             let wasCall = clock.now().timeIntervalSince(callStart) >= MeetingDebounce.seconds
             meeting.callStart = nil
+            meeting.calendarEvent = nil
             meeting.stopOfferSessionId = wasCall ? (try? runningSession())?.id : nil
         }
     }
