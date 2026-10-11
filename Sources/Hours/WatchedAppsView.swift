@@ -3,31 +3,36 @@ import HoursCore
 import SwiftUI
 
 /// Turns `NSWorkspace.didActivateApplicationNotification` into `activeAppChanged` events.
-/// Notification-driven: no polling, no permission. Hours itself is ignored so opening its
+/// Notification-driven: no polling. Window titles (for title rules) need Accessibility; without it they are nil. Hours itself is ignored so opening its
 /// own windows doesn't count as leaving the Watched App.
 @MainActor
 final class ActiveAppObserver {
     private var token: NSObjectProtocol?
     private let feed: AppDetectionFeed
+    private let titles = WindowTitleWatcher()
     private let onChange: @MainActor () -> Void
 
     init(feed: AppDetectionFeed, onChange: @escaping @MainActor () -> Void) {
         self.feed = feed
         self.onChange = onChange
         let me = Bundle.main.bundleIdentifier
-        if let id = NSWorkspace.shared.frontmostApplication?.bundleIdentifier, id != me {
-            feed.emit(.activeAppChanged(bundleID: id, windowTitle: nil))
+        if let front = NSWorkspace.shared.frontmostApplication, let id = front.bundleIdentifier, id != me {
+            follow(front, id)
         }
         token = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            guard let id = app?.bundleIdentifier, id != me else { return }
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.feed.emit(.activeAppChanged(bundleID: id, windowTitle: nil))
-                self.onChange()
-            }
+            guard let app, let id = app.bundleIdentifier, id != me else { return }
+            MainActor.assumeIsolated { self?.follow(app, id) }
+        }
+    }
+
+    /// Emits the app now and again on every window or title change while it stays in front.
+    private func follow(_ app: NSRunningApplication, _ id: String) {
+        titles.watch(pid: app.processIdentifier) { [weak self] title in
+            self?.feed.emit(.activeAppChanged(bundleID: id, windowTitle: title))
+            self?.onChange()
         }
     }
 }
@@ -62,6 +67,15 @@ struct WatchedAppsView: View {
             Stepper("Prompt after \(model.watchedDelaySeconds) s in front",
                     value: Binding(get: { model.watchedDelaySeconds }, set: { model.setWatchedDelay($0) }),
                     in: 5...600, step: 5)
+            Section("Window titles") {
+                if AccessibilityAccess.granted {
+                    Text("Accessibility is on: title rules can pick the Project.").font(.caption)
+                } else {
+                    Text("Title rules read the front window's title of a Watched App, which macOS only allows with the Accessibility permission. Hours reads nothing else and never records screens. Without it, prompts use the app's default Project.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("Grant Accessibility…") { AccessibilityAccess.requestWithPrompt() }
+                }
+            }
             Section("Watched Apps") {
                 ForEach(model.watchedApps, id: \.bundleID) { app in
                     HStack {
@@ -77,6 +91,7 @@ struct WatchedAppsView: View {
                         .labelsHidden()
                         Button("Remove") { model.removeWatchedApp(app.bundleID) }
                     }
+                    TitleRulesEditor(model: model, app: app)
                 }
                 Menu("Add app…") {
                     ForEach(installed.filter { app in !model.watchedApps.contains { $0.bundleID == app.bundleID } },
@@ -91,6 +106,53 @@ struct WatchedAppsView: View {
         .frame(minWidth: 460, minHeight: 320)
         .onAppear { installed = InstalledApp.scan() }
         .onDisappear { installed = [] }
+    }
+}
+
+/// Ordered rules for one Watched App: the first match picks the Project, else the default applies.
+struct TitleRulesEditor: View {
+    let model: TrayModel
+    let app: WatchedApp
+    @State private var kind = TitleRule.Kind.contains
+    @State private var text = ""
+    @State private var projectId: Int64?
+
+    var body: some View {
+        DisclosureGroup("Title rules (\(model.titleRules[app.bundleID]?.count ?? 0))") {
+            let rules = model.titleRules[app.bundleID] ?? []
+            ForEach(Array(rules.enumerated()), id: \.element.id) { i, rule in
+                HStack {
+                    Text("\(rule.kind == .contains ? "contains" : "matches") “\(rule.text)” → \(model.label(for: rule.projectId))")
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Up", systemImage: "arrow.up") { model.moveTitleRule(app.bundleID, rules, from: i, by: -1) }
+                        .disabled(i == 0)
+                    Button("Down", systemImage: "arrow.down") { model.moveTitleRule(app.bundleID, rules, from: i, by: 1) }
+                        .disabled(i == rules.count - 1)
+                    Button("Delete", systemImage: "trash") { model.removeTitleRule(rule.id!) }
+                }
+                .labelStyle(.iconOnly)
+            }
+            HStack {
+                Picker("Match", selection: $kind) {
+                    Text("Title contains").tag(TitleRule.Kind.contains)
+                    Text("Matches pattern").tag(TitleRule.Kind.pattern)
+                }
+                .labelsHidden()
+                TextField("acme-site", text: $text)
+                Picker("Project", selection: $projectId) {
+                    Text("Project…").tag(Int64?.none)
+                    ForEach(model.projects) { p in Text(model.label(for: p.id!)).tag(Int64?.some(p.id!)) }
+                }
+                .labelsHidden()
+                Button("Add") {
+                    guard let projectId else { return }
+                    model.addTitleRule(app.bundleID, kind, text, projectId)
+                    if model.error == nil { text = "" }
+                }
+                .disabled(projectId == nil || text.isEmpty)
+            }
+        }
     }
 }
 
@@ -126,6 +188,15 @@ extension TrayModel {
         act { try tracker.setWatchedApp(bundleID: id, name: name, projectId: projectId) }
     }
     func removeWatchedApp(_ id: String) { act { try tracker.removeWatchedApp(bundleID: id) } }
+    func addTitleRule(_ id: String, _ kind: TitleRule.Kind, _ text: String, _ projectId: Int64) {
+        act { try tracker.addTitleRule(bundleID: id, kind: kind, text: text, projectId: projectId) }
+    }
+    func removeTitleRule(_ id: Int64) { act { try tracker.removeTitleRule(id: id) } }
+    func moveTitleRule(_ bundleID: String, _ rules: [TitleRule], from i: Int, by d: Int) {
+        var ids = rules.compactMap(\.id)
+        ids.swapAt(i, i + d)
+        act { try tracker.setTitleRuleOrder(bundleID: bundleID, ids: ids) }
+    }
     func setWatchedDelay(_ seconds: Int) { act { try tracker.setWatchedAppDelay(TimeInterval(seconds)) } }
     func acceptWatchedPrompt(projectId: Int64) { act { try tracker.start(projectId: projectId) } }
     func snoozeWatched(today: Bool) {

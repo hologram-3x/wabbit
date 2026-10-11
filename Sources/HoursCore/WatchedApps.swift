@@ -26,6 +26,8 @@ public struct WatchedAppPrompt: Equatable, Sendable {
 /// In-memory front-app observation and snoozes. Not persisted (a relaunch starts clean).
 final class WatchedAppRuntime {
     var front: String?
+    /// Focused window title of the front app, nil when unknown (no Accessibility permission).
+    var title: String?
     var since = Date.distantPast
     /// "Not now": until the app leaves the front.
     var notNow = false
@@ -100,10 +102,8 @@ extension Tracker {
               (w.notToday[id] ?? .distantPast) <= now,
               let app = try? db.read({ try WatchedApp.fetchOne($0, key: id) })
         else { return nil }
-        // A Closed default Project is no suggestion.
-        let matched = app.projectId.flatMap { pid in
-            (try? db.read { try Project.fetchOne($0, key: pid) }).flatMap { p in (try? isClosed(p)) == false ? p.id : nil }
-        }
+        // Title rules first, then the default; a Closed Project is no suggestion.
+        let matched = resolveProject(for: app, title: w.title)
         let runningId = (try? runningSession())?.projectId
         if let matched {
             guard runningId != matched else { return nil }
@@ -126,10 +126,11 @@ extension Tracker {
     }
 
     func handleWatchedAppEvent(_ event: DetectionEvent) {
-        guard case .activeAppChanged(let id, _) = event else { return }
+        guard case .activeAppChanged(let id, let title) = event else { return }
         let w = watched
         let now = clock.now()
-        guard id != w.front else { return }
+        w.title = title
+        guard id != w.front else { return } // same app, new window title: keeps the stay
         let delay = (try? watchedAppDelay()) ?? Self.watchedDelayDefault
         let resume = w.away.flatMap { $0.bundleID == id && now.timeIntervalSince($0.leftAt) < delay ? $0 : nil }
         // Only watched apps are remembered, so hopping through unwatched apps keeps the last stay.
