@@ -15,7 +15,7 @@ public struct Project: Codable, Equatable, Identifiable, FetchableRecord, Mutabl
 }
 
 /// One continuous stretch of tracked time. A running Session has no end.
-public struct Session: Codable, Equatable, Identifiable, FetchableRecord, MutablePersistableRecord {
+public struct Session: Codable, Equatable, Sendable, Identifiable, FetchableRecord, MutablePersistableRecord {
     public var id: Int64?
     public var projectId: Int64
     public var start: Date
@@ -25,13 +25,15 @@ public struct Session: Codable, Equatable, Identifiable, FetchableRecord, Mutabl
 
 public enum HoursError: Error, Equatable {
     case emptyName
+    case noPendingIdle
 }
 
 /// The core's public API: commands in, queries out. Tests drive it with a fake clock,
 /// a fake detection feed and a real in-memory SQLite database.
 public final class Tracker {
-    private let db: DatabaseQueue
-    private let clock: WallClock
+    let db: DatabaseQueue
+    let clock: WallClock
+    let idle = IdleRuntime()
 
     /// `path: nil` opens a fresh in-memory database.
     public init(path: String?, clock: WallClock) throws {
@@ -61,6 +63,7 @@ public final class Tracker {
                 t.column("end", .datetime)
             }
         }
+        m.registerMigration("v2-idle", migrate: migrateIdle)
         return m
     }
 
@@ -69,7 +72,7 @@ public final class Tracker {
     }
 
     func handle(_ event: DetectionEvent) {
-        // Prompt decisions arrive with tickets 07-11.
+        handleIdleEvent(event)
     }
 
     // MARK: Commands

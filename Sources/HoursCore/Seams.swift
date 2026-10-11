@@ -11,7 +11,7 @@ public struct SystemClock: WallClock {
 }
 
 /// OS signals the shell turns into events for the core (spec: "Detection input").
-/// Later tickets (07, 08, 09, 10, 11) give these meaning; for now the core ignores them.
+/// Idle (07) uses `userIdle` / `userActive`; later tickets (08–11) cover the rest.
 public enum DetectionEvent: Equatable, Sendable {
     case microphone(on: Bool)
     case camera(on: Bool)
