@@ -38,6 +38,10 @@ struct HoursApp: App {
             ExportView(model: model)
         }
 
+        Window("Backup", id: "backup") {
+            BackupView(model: model)
+        }
+
         Window("Watched Apps", id: "watched") {
             WatchedAppsView(model: model)
         }
@@ -385,6 +389,10 @@ struct TrayView: View {
             }
             Button("Export…") {
                 openWindow(id: "export")
+                NSApplication.shared.activate()
+            }
+            Button("Backup & Restore…") {
+                openWindow(id: "backup")
                 NSApplication.shared.activate()
             }
             Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))
