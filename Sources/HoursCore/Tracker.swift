@@ -22,6 +22,8 @@ public struct Session: Codable, Equatable, Sendable, Identifiable, FetchableReco
     public var projectId: Int64
     public var start: Date
     public var end: Date?
+    /// Added by hand (ticket 04).
+    public var manual: Bool = false
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
 
@@ -29,6 +31,9 @@ public enum HoursError: Error, Equatable {
     case emptyName
     case projectClosed, lastProject, notFound, invalidMoney
     case noPendingIdle
+    case invalidRange
+    /// The new or edited Session overlaps `Session`; `String` names it (Client / Project, times).
+    case sessionOverlap(Session, String)
 }
 
 /// The core's public API: commands in, queries out. Tests drive it with a fake clock,
@@ -69,6 +74,7 @@ public final class Tracker {
         registerLifecycleMigration(&m)
         m.registerMigration("v2-idle", migrate: migrateIdle)
         registerMoneyMigration(&m)
+        registerManualMigration(&m)
         return m
     }
 
