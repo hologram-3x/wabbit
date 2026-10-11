@@ -17,12 +17,16 @@ struct HoursApp: App {
         Window("Manage Clients", id: "manage") {
             ManageView(model: model)
         }
+
+        Window("Overview", id: "overview") {
+            OverviewView(model: model)
+        }
     }
 }
 
 @MainActor @Observable
 final class TrayModel {
-    private let tracker: Tracker
+    let tracker: Tracker
     private(set) var projects: [Project] = []
     private(set) var clients: [Int64: String] = [:]
     private(set) var running: Session?
@@ -167,6 +171,10 @@ struct TrayView: View {
             Divider()
             Button("Manage Clients…") {
                 openWindow(id: "manage")
+                NSApplication.shared.activate()
+            }
+            Button("Overview…") {
+                openWindow(id: "overview")
                 NSApplication.shared.activate()
             }
             Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))
