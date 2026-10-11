@@ -24,6 +24,8 @@
 	<true/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Hours reads your calendar event when a call starts, to suggest the right Project. It works without it.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Hours</string>
 </dict>
