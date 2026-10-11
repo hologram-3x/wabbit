@@ -94,11 +94,11 @@ extension Tracker {
         try db.write { try Self.setSetting($0, "amountMode", mode.rawValue) }
     }
 
-    private static func setting(_ db: Database, _ key: String) throws -> String? {
+    static func setting(_ db: Database, _ key: String) throws -> String? {
         try String.fetchOne(db, sql: "SELECT value FROM setting WHERE key = ?", arguments: [key])
     }
 
-    private static func setSetting(_ db: Database, _ key: String, _ value: String) throws {
+    static func setSetting(_ db: Database, _ key: String, _ value: String) throws {
         try db.execute(sql: "INSERT OR REPLACE INTO setting (key, value) VALUES (?, ?)", arguments: [key, value])
     }
 
@@ -124,7 +124,7 @@ extension Tracker {
         try db.read { try Self.money($0, projectId: projectId) }
     }
 
-    private static func money(_ db: Database, projectId: Int64) throws -> ProjectMoney {
+    static func money(_ db: Database, projectId: Int64) throws -> ProjectMoney {
         guard let row = try Row.fetchOne(db, sql: "SELECT rateCents, billingKind, fixedPriceCents, estimatedHours FROM project WHERE id = ?", arguments: [projectId]) else {
             throw HoursError.notFound
         }
