@@ -38,6 +38,10 @@ struct HoursApp: App {
             ExportView(model: model)
         }
 
+        Window("Backup", id: "backup") {
+            BackupView(model: model)
+        }
+
         Window("Watched Apps", id: "watched") {
             WatchedAppsView(model: model)
         }
@@ -61,7 +65,7 @@ final class AppDetectionFeed: DetectionFeed {
 @MainActor @Observable
 final class TrayModel {
     let tracker: Tracker
-    private let feed = AppDetectionFeed()
+    let feed = AppDetectionFeed()
     private var activeApp: ActiveAppObserver?
     private var watchedTimer: Timer?
     private var idlePoll: Timer?
@@ -89,6 +93,10 @@ final class TrayModel {
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
+    /// Meeting Prompt (ticket 08): see MediaDetection.swift.
+    var meetingPrompt: MeetingPrompt?
+    var meetingPanel: NSPanel?
+    private var media: MediaDetection?
 
     /// Idle is polled at most every 30 s (footprint budget / ticket 07).
     static let idlePollInterval: TimeInterval = 30
@@ -106,6 +114,7 @@ final class TrayModel {
         launchesAtLogin = SMAppService.mainApp.status == .enabled
         refresh()
         startIdlePolling()
+        media = MediaDetection { [weak self] in self?.mediaChanged($0) }
         activeApp = ActiveAppObserver(feed: feed) { [weak self] in self?.scheduleWatchedCheck() }
         scheduleWatchedCheck()
         // After sleep, timers are stale: re-read the running Session and the clock.
@@ -155,6 +164,7 @@ final class TrayModel {
             titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
         }
         updateTick()
+        updateMeetingPanel()
     }
 
     func label(for projectId: Int64) -> String {
@@ -287,6 +297,10 @@ struct TrayView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if model.meetingPrompt != nil {
+                MeetingPromptView(model: model)
+                Divider()
+            }
             if let prompt = model.idlePrompt {
                 idlePromptSection(prompt)
                 Divider()
@@ -377,6 +391,10 @@ struct TrayView: View {
             }
             Button("Export…") {
                 openWindow(id: "export")
+                NSApplication.shared.activate()
+            }
+            Button("Backup & Restore…") {
+                openWindow(id: "backup")
                 NSApplication.shared.activate()
             }
             Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))
