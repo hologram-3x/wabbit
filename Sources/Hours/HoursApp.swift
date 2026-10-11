@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import HoursCore
 import ServiceManagement
+import Sparkle
 import SwiftUI
 
 @main
@@ -98,6 +99,11 @@ final class TrayModel {
     var meetingPanel: NSPanel?
     let calendar = CalendarAccess()
     private var media: MediaDetection?
+    /// Sparkle (ticket 13). Started only when the build embedded an EdDSA public key
+    /// (scripts/build-app.sh, SPARKLE_PUBLIC_ED_KEY); dev builds without one never check.
+    let updater = SPUStandardUpdaterController(
+        startingUpdater: TrayModel.updatesEnabled, updaterDelegate: nil, userDriverDelegate: nil)
+    static let updatesEnabled = (Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String)?.isEmpty == false
 
     /// Idle is polled at most every 30 s (footprint budget / ticket 07).
     static let idlePollInterval: TimeInterval = 30
@@ -398,6 +404,8 @@ struct TrayView: View {
                 openWindow(id: "backup")
                 NSApplication.shared.activate()
             }
+            Button("Check for Updates…") { model.updater.checkForUpdates(nil) }
+                .disabled(!TrayModel.updatesEnabled)
             Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))
             Button("Quit Hours") { NSApplication.shared.terminate(nil) }
         }

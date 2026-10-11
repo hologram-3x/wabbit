@@ -13,11 +13,16 @@ jobs:
       - run: scripts/build-app.sh
 
   # Signed + notarized DMG. Runs on version tags (v*) or by hand; needs the secrets in docs/release.md.
+  # On a tag it also signs a Sparkle appcast and publishes both to a GitHub Release.
   release:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: macos-15
+    permissions:
+      contents: write
     env:
+      SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+      SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
       MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -51,6 +56,17 @@ jobs:
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
           xcrun stapler staple build/Hours.dmg
           spctl --assess --type open --context context:primary-signature -v build/Hours.dmg
+
+      - name: Sparkle appcast and GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/release && cp build/Hours.dmg build/release/
+          echo "$SPARKLE_ED_PRIVATE_KEY" | .build/artifacts/sparkle/Sparkle/bin/generate_appcast --ed-key-file - \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/" build/release
+          gh release create "$GITHUB_REF_NAME" build/release/Hours.dmg build/release/appcast.xml \
+            --title "Hours ${GITHUB_REF_NAME#v}" --generate-notes
 
       - uses: actions/upload-artifact@v4
         with:
