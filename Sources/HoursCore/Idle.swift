@@ -54,7 +54,7 @@ extension Tracker {
     static let idleThresholdKey = "idleThresholdSeconds"
 
     static func migrateIdle(_ db: Database) throws {
-        try db.create(table: "setting") { t in
+        try db.create(table: "setting", ifNotExists: true) { t in
             t.column("key", .text).primaryKey()
             t.column("value", .text).notNull()
         }
