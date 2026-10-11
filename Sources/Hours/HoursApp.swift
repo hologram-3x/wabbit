@@ -12,7 +12,13 @@ struct HoursApp: App {
         MenuBarExtra {
             TrayView(model: model)
         } label: {
-            Image(systemName: model.running == nil ? "clock" : "stop.circle.fill")
+            if let running = model.running {
+                // `model.now` ticks once a minute while a Session runs (footprint budget).
+                Label("\(model.shortName(for: running.projectId)) \(Self.hm(model.now.timeIntervalSince(running.start)))",
+                      systemImage: "stop.circle.fill")
+            } else {
+                Image(systemName: "clock")
+            }
         }
         .menuBarExtraStyle(.window)
 
@@ -27,6 +33,13 @@ struct HoursApp: App {
         Window("Sessions", id: "sessions") {
             SessionsView(model: model)
         }
+    }
+}
+
+extension HoursApp {
+    static func hm(_ t: TimeInterval) -> String {
+        let m = max(0, Int(t / 60))
+        return m < 60 ? "\(m)m" : "\(m / 60)h\(String(format: "%02d", m % 60))"
     }
 }
 
@@ -47,6 +60,12 @@ final class TrayModel {
     private(set) var projects: [Project] = []
     private(set) var clients: [Int64: String] = [:]
     private(set) var running: Session?
+    /// Top N Open Projects by recent use; the rest of `projects` go under "Other…".
+    private(set) var quickStart: [Project] = []
+    /// Refreshed every 60 s while a Session runs, and on wake; drives the tray label.
+    private(set) var now = Date()
+    private var tick: Timer?
+    static let quickStartCount = 5
     private(set) var allProjects: [Project] = []
     private(set) var allClients: [Client] = []
     private(set) var closedIds: Set<Int64> = []
@@ -73,6 +92,23 @@ final class TrayModel {
         launchesAtLogin = SMAppService.mainApp.status == .enabled
         refresh()
         startIdlePolling()
+        // After sleep, timers are stale: re-read the running Session and the clock.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in Task { @MainActor in self?.refresh() } }
+    }
+
+    func shortName(for projectId: Int64) -> String {
+        allProjects.first { $0.id == projectId }?.name ?? "?"
+    }
+
+    private func updateTick() {
+        now = Date()
+        if running == nil { tick?.invalidate(); tick = nil; return }
+        guard tick == nil else { return }
+        tick = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.now = Date() }
+        }
     }
 
     func refresh() {
@@ -84,9 +120,11 @@ final class TrayModel {
             domains = Dictionary(uniqueKeysWithValues: try allClients.map { ($0.id!, try tracker.domains(clientId: $0.id!)) })
             clients = Dictionary(uniqueKeysWithValues: try tracker.clients().map { ($0.id!, $0.name) })
             running = try tracker.runningSession()
+            quickStart = try tracker.quickStartProjects(limit: Self.quickStartCount)
             idleThresholdMinutes = Int(try tracker.idleThreshold() / 60)
             idlePrompt = tracker.pendingIdlePrompt()
         }
+        updateTick()
     }
 
     func label(for projectId: Int64) -> String {
@@ -184,9 +222,8 @@ final class TrayModel {
             wasPastIdleThreshold = false
         }
         idlePrompt = tracker.pendingIdlePrompt()
-        if let running = try? tracker.runningSession() {
-            self.running = running
-        }
+        let current = try? tracker.runningSession()
+        if current != running { running = current; updateTick() }
     }
 
     // MARK: Launch at login
@@ -244,12 +281,20 @@ struct TrayView: View {
                 Text("Create a Client and its first Project to start tracking.")
                     .foregroundStyle(.secondary)
             }
-            ForEach(model.projects) { project in
+            ForEach(model.quickStart) { project in
                 HStack {
                     Text(model.label(for: project.id!))
                     Spacer()
                     Button("Start") { model.start(project); model.refresh() }
                         .disabled(model.running?.projectId == project.id)
+                }
+            }
+            let others = model.projects.filter { p in !model.quickStart.contains { $0.id == p.id } }
+            if !others.isEmpty {
+                Menu("Other…") {
+                    ForEach(others) { project in
+                        Button(model.label(for: project.id!)) { model.start(project); model.refresh() }
+                    }
                 }
             }
 
