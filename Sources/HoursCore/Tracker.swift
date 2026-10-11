@@ -69,6 +69,7 @@ public final class Tracker {
         registerLifecycleMigration(&m)
         m.registerMigration("v2-idle", migrate: migrateIdle)
         registerMoneyMigration(&m)
+        registerExportMigration(&m)
         return m
     }
 

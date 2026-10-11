@@ -23,6 +23,10 @@ struct HoursApp: App {
         Window("Overview", id: "overview") {
             OverviewView(model: model)
         }
+
+        Window("Export", id: "export") {
+            ExportView(model: model)
+        }
     }
 }
 
@@ -276,6 +280,10 @@ struct TrayView: View {
             }
             Button("Overview…") {
                 openWindow(id: "overview")
+                NSApplication.shared.activate()
+            }
+            Button("Export…") {
+                openWindow(id: "export")
                 NSApplication.shared.activate()
             }
             Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))
