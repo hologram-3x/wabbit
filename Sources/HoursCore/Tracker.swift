@@ -4,6 +4,7 @@ import GRDB
 public struct Client: Codable, Equatable, Identifiable, FetchableRecord, MutablePersistableRecord {
     public var id: Int64?
     public var name: String
+    public var closedAt: Date? = nil
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
 
@@ -11,6 +12,7 @@ public struct Project: Codable, Equatable, Identifiable, FetchableRecord, Mutabl
     public var id: Int64?
     public var clientId: Int64
     public var name: String
+    public var closedAt: Date? = nil
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
 
@@ -25,13 +27,14 @@ public struct Session: Codable, Equatable, Identifiable, FetchableRecord, Mutabl
 
 public enum HoursError: Error, Equatable {
     case emptyName
+    case projectClosed, lastProject, notFound
 }
 
 /// The core's public API: commands in, queries out. Tests drive it with a fake clock,
 /// a fake detection feed and a real in-memory SQLite database.
 public final class Tracker {
-    private let db: DatabaseQueue
-    private let clock: WallClock
+    let db: DatabaseQueue
+    let clock: WallClock
 
     /// `path: nil` opens a fresh in-memory database.
     public init(path: String?, clock: WallClock) throws {
@@ -61,6 +64,7 @@ public final class Tracker {
                 t.column("end", .datetime)
             }
         }
+        registerLifecycleMigration(&m)
         return m
     }
 
@@ -94,6 +98,7 @@ public final class Tracker {
     public func start(projectId: Int64) throws -> Session {
         let now = clock.now()
         return try db.write { db in
+            try Self.requireOpen(db, projectId: projectId)
             try Self.stopRunning(db, at: now)
             var session = Session(projectId: projectId, start: now)
             try session.insert(db)
