@@ -89,6 +89,7 @@ final class TrayModel {
     private(set) var watchedPrompt: WatchedAppPrompt?
     private(set) var watchedApps: [WatchedApp] = []
     private(set) var watchedDelaySeconds = 30
+    private(set) var titleRules: [String: [TitleRule]] = [:]
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
@@ -160,6 +161,7 @@ final class TrayModel {
             watchedPrompt = tracker.pendingWatchedAppPrompt()
             watchedApps = try tracker.watchedApps()
             watchedDelaySeconds = Int(try tracker.watchedAppDelay())
+            titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
         }
         updateTick()
         updateMeetingPanel()
