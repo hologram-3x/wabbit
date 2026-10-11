@@ -24,6 +24,10 @@ struct HoursApp: App {
             OverviewView(model: model)
         }
 
+        Window("Sessions", id: "sessions") {
+            SessionsView(model: model)
+        }
+
         Window("Export", id: "export") {
             ExportView(model: model)
         }
@@ -91,6 +95,12 @@ final class TrayModel {
 
     func label(for projectId: Int64) -> String {
         guard let p = projects.first(where: { $0.id == projectId }) else { return "?" }
+        return "\(clients[p.clientId] ?? "?") / \(p.name)"
+    }
+
+    /// Client / Project for any Project, Closed ones included (Open ones only in `label(for:)`).
+    func label(forAny projectId: Int64) -> String {
+        guard let p = allProjects.first(where: { $0.id == projectId }) else { return "?" }
         return "\(clients[p.clientId] ?? "?") / \(p.name)"
     }
 
@@ -280,6 +290,10 @@ struct TrayView: View {
             }
             Button("Overview…") {
                 openWindow(id: "overview")
+                NSApplication.shared.activate()
+            }
+            Button("Sessions…") {
+                openWindow(id: "sessions")
                 NSApplication.shared.activate()
             }
             Button("Export…") {

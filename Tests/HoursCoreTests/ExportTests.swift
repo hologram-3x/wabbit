@@ -104,6 +104,15 @@ import HoursCore
     #expect(csv.hasPrefix("\u{FEFF}date,client,project,start,end,duration,rate,amount,manual\n"))
 }
 
+@Test func manualSessionsAreMarkedInTheCSV() throws {
+    let h = try Harness()
+    let (_, p) = try h.tracker.createClient(name: "ACME", firstProject: "Website")
+    let start = h.clock.now().addingTimeInterval(-7200)
+    _ = try h.tracker.addManualSession(projectId: p.id!, start: start, end: start.addingTimeInterval(3600))
+    let csv = try h.tracker.exportCSV(scope: .project(p.id!), mode: .precise)
+    #expect(csv.split(whereSeparator: \.isNewline).last?.hasSuffix(",true") == true)
+}
+
 // MARK: - helpers
 
 private func countDataRows(_ csv: String) -> Int {

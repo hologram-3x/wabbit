@@ -81,7 +81,6 @@ extension Tracker {
 
     /// CSV of Sessions for the scope. Sessions stay precise in storage; rounding is only in the returned text.
     /// Columns: date, client, project, start, end, duration, rate, amount, manual.
-    /// `manual` is always false until Manual Sessions (ticket 04) land.
     public func exportCSV(scope: ExportScope, mode: ExportMode) throws -> String {
         let now = clock.now()
         let step = try roundingStep()
@@ -109,7 +108,6 @@ extension Tracker {
                     : exact
                 let rate = try Self.money(db, projectId: project.id!).rateCents ?? 0
                 let amount = Money.revenue(seconds: billed, rateCents: rate)
-                // "false" until ticket 04 adds a Manual flag on Session.
                 return [
                     Self.csvDay(session.start),
                     Self.csvEscape(client.name),
@@ -119,7 +117,7 @@ extension Tracker {
                     Self.csvDurationHours(billed),
                     Self.csvCents(rate),
                     Self.csvCents(amount),
-                    "false",
+                    String(session.manual),
                 ].joined(separator: ",")
             }
         }
