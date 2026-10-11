@@ -27,7 +27,7 @@ public struct Session: Codable, Equatable, Identifiable, FetchableRecord, Mutabl
 
 public enum HoursError: Error, Equatable {
     case emptyName
-    case projectClosed, lastProject, notFound
+    case projectClosed, lastProject, notFound, invalidMoney
 }
 
 /// The core's public API: commands in, queries out. Tests drive it with a fake clock,
@@ -65,6 +65,7 @@ public final class Tracker {
             }
         }
         registerLifecycleMigration(&m)
+        registerMoneyMigration(&m)
         return m
     }
 
