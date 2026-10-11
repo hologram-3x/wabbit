@@ -42,6 +42,7 @@ public final class Tracker {
     let db: DatabaseQueue
     let clock: WallClock
     let idle = IdleRuntime()
+    let watched = WatchedAppRuntime()
 
     /// `path: nil` opens a fresh in-memory database.
     public init(path: String?, clock: WallClock) throws {
@@ -76,6 +77,7 @@ public final class Tracker {
         registerMoneyMigration(&m)
         registerManualMigration(&m)
         registerExportMigration(&m)
+        m.registerMigration("v7-watched-apps", migrate: migrateWatchedApps)
         return m
     }
 
@@ -85,6 +87,7 @@ public final class Tracker {
 
     func handle(_ event: DetectionEvent) {
         handleIdleEvent(event)
+        handleWatchedAppEvent(event)
     }
 
     // MARK: Commands
