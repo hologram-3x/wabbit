@@ -57,7 +57,7 @@ final class AppDetectionFeed: DetectionFeed {
 @MainActor @Observable
 final class TrayModel {
     let tracker: Tracker
-    private let feed = AppDetectionFeed()
+    let feed = AppDetectionFeed()
     private var idlePoll: Timer?
     private var wasPastIdleThreshold = false
 
@@ -79,6 +79,10 @@ final class TrayModel {
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
+    /// Meeting Prompt (ticket 08): see MediaDetection.swift.
+    var meetingPrompt: MeetingPrompt?
+    var meetingPanel: NSPanel?
+    private var media: MediaDetection?
 
     /// Idle is polled at most every 30 s (footprint budget / ticket 07).
     static let idlePollInterval: TimeInterval = 30
@@ -96,6 +100,7 @@ final class TrayModel {
         launchesAtLogin = SMAppService.mainApp.status == .enabled
         refresh()
         startIdlePolling()
+        media = MediaDetection { [weak self] in self?.mediaChanged($0) }
         // After sleep, timers are stale: re-read the running Session and the clock.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -129,6 +134,7 @@ final class TrayModel {
             idlePrompt = tracker.pendingIdlePrompt()
         }
         updateTick()
+        updateMeetingPanel()
     }
 
     func label(for projectId: Int64) -> String {
@@ -260,6 +266,10 @@ struct TrayView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if model.meetingPrompt != nil {
+                MeetingPromptView(model: model)
+                Divider()
+            }
             if let prompt = model.idlePrompt {
                 idlePromptSection(prompt)
                 Divider()

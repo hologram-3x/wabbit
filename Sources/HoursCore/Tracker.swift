@@ -42,6 +42,7 @@ public final class Tracker {
     let db: DatabaseQueue
     let clock: WallClock
     let idle = IdleRuntime()
+    let meeting = MeetingRuntime()
 
     /// `path: nil` opens a fresh in-memory database.
     public init(path: String?, clock: WallClock) throws {
@@ -85,6 +86,7 @@ public final class Tracker {
 
     func handle(_ event: DetectionEvent) {
         handleIdleEvent(event)
+        handleMeetingEvent(event)
     }
 
     // MARK: Commands
