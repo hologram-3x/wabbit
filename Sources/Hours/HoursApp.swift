@@ -37,6 +37,10 @@ struct HoursApp: App {
         Window("Export", id: "export") {
             ExportView(model: model)
         }
+
+        Window("Watched Apps", id: "watched") {
+            WatchedAppsView(model: model)
+        }
     }
 }
 
@@ -58,6 +62,8 @@ final class AppDetectionFeed: DetectionFeed {
 final class TrayModel {
     let tracker: Tracker
     let feed = AppDetectionFeed()
+    private var activeApp: ActiveAppObserver?
+    private var watchedTimer: Timer?
     private var idlePoll: Timer?
     private var wasPastIdleThreshold = false
 
@@ -76,6 +82,9 @@ final class TrayModel {
     private(set) var domains: [Int64: [String]] = [:]
     private(set) var idleThresholdMinutes: Int = 15
     private(set) var idlePrompt: IdlePrompt?
+    private(set) var watchedPrompt: WatchedAppPrompt?
+    private(set) var watchedApps: [WatchedApp] = []
+    private(set) var watchedDelaySeconds = 30
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
@@ -101,10 +110,22 @@ final class TrayModel {
         refresh()
         startIdlePolling()
         media = MediaDetection { [weak self] in self?.mediaChanged($0) }
+        activeApp = ActiveAppObserver(feed: feed) { [weak self] in self?.scheduleWatchedCheck() }
+        scheduleWatchedCheck()
         // After sleep, timers are stale: re-read the running Session and the clock.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in Task { @MainActor in self?.refresh() } }
+    }
+
+    /// One-shot timer for when the front app's delay is up; nothing runs while no app is waiting.
+    private func scheduleWatchedCheck() {
+        watchedTimer?.invalidate()
+        watchedPrompt = tracker.pendingWatchedAppPrompt()
+        let delay = TimeInterval(watchedDelaySeconds)
+        watchedTimer = Timer.scheduledTimer(withTimeInterval: delay + 0.5, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.watchedPrompt = self?.tracker.pendingWatchedAppPrompt() }
+        }
     }
 
     func shortName(for projectId: Int64) -> String {
@@ -132,6 +153,9 @@ final class TrayModel {
             quickStart = try tracker.quickStartProjects(limit: Self.quickStartCount)
             idleThresholdMinutes = Int(try tracker.idleThreshold() / 60)
             idlePrompt = tracker.pendingIdlePrompt()
+            watchedPrompt = tracker.pendingWatchedAppPrompt()
+            watchedApps = try tracker.watchedApps()
+            watchedDelaySeconds = Int(try tracker.watchedAppDelay())
         }
         updateTick()
         updateMeetingPanel()
@@ -161,7 +185,7 @@ final class TrayModel {
     }
     func addDomain(_ c: Client, _ d: String) { act { try tracker.addDomain(clientId: c.id!, d) } }
     func removeDomain(_ c: Client, _ d: String) { act { try tracker.removeDomain(clientId: c.id!, d) } }
-    private func act(_ body: () throws -> Void) { attempt(body); refresh() }
+    func act(_ body: () throws -> Void) { attempt(body); refresh() }
     func createClient(_ name: String, firstProject: String) -> Bool {
         attempt { try tracker.createClient(name: name, firstProject: firstProject) }
     }
@@ -232,6 +256,7 @@ final class TrayModel {
             wasPastIdleThreshold = false
         }
         idlePrompt = tracker.pendingIdlePrompt()
+        watchedPrompt = tracker.pendingWatchedAppPrompt()
         let current = try? tracker.runningSession()
         if current != running { running = current; updateTick() }
     }
@@ -275,6 +300,9 @@ struct TrayView: View {
                 Divider()
             } else if let split = model.splitIdleSession {
                 splitFollowUpSection(split)
+                Divider()
+            } else if let watched = model.watchedPrompt {
+                WatchedAppPromptSection(model: model, prompt: watched)
                 Divider()
             }
 
@@ -349,6 +377,10 @@ struct TrayView: View {
             }
             Button("Sessions…") {
                 openWindow(id: "sessions")
+                NSApplication.shared.activate()
+            }
+            Button("Watched Apps…") {
+                openWindow(id: "watched")
                 NSApplication.shared.activate()
             }
             Button("Export…") {
