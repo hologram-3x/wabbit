@@ -66,7 +66,7 @@ func registerMoneyMigration(_ m: inout DatabaseMigrator) {
             t.add(column: "fixedPriceCents", .integer)
             t.add(column: "estimatedHours", .double)
         }
-        try db.create(table: "setting") { t in
+        try db.create(table: "setting", ifNotExists: true) { t in
             t.primaryKey("key", .text)
             t.column("value", .text).notNull()
         }
