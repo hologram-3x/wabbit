@@ -28,7 +28,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func requestAuthorization() async {
-        _ = try? await center?.requestAuthorization(options: [.alert, .sound])
+        guard let center else { return }
+        await withCheckedContinuation { c in center.requestAuthorization(options: [.alert, .sound]) { _, _ in c.resume() } }
         await refreshStatus()
     }
 
