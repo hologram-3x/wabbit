@@ -2,7 +2,7 @@
 status: in-progress
 ---
 
-# Wabbit
+# 🐇 Wabbit
 
 Named after the White Rabbit, "W. Rabbit" on his door in Alice in Wonderland.
 
