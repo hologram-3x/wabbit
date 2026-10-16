@@ -35,11 +35,11 @@ Keep the private key in the Keychain (or a password manager) too: losing it mean
 
 ## Where the appcast lives (private repo caveat)
 
-`SUFeedURL` in `App/Info.plist` is `https://github.com/hologram-3x/hours/releases/latest/download/appcast.xml`, and the appcast points each DMG at `https://github.com/hologram-3x/hours/releases/download/<tag>/Wabbit.dmg`. **While `hologram-3x/hours` is private, those URLs return 404 to anyone not logged in**, and Sparkle sends no GitHub credentials, so update checks fail ("Update Error"). Options:
+`SUFeedURL` in `App/Info.plist` is `https://github.com/hologram-3x/wabbit/releases/latest/download/appcast.xml`, and the appcast points each DMG at `https://github.com/hologram-3x/wabbit/releases/download/<tag>/Wabbit.dmg`. **While `hologram-3x/wabbit` is private, those URLs return 404 to anyone not logged in**, and Sparkle sends no GitHub credentials, so update checks fail ("Update Error"). Options:
 
-1. **Public releases-only repo** (recommended): e.g. `hologram-3x/hours-releases`, empty except for Releases. In `ci.yml` add `--repo hologram-3x/hours-releases` to `gh release create`, use a fine-grained PAT with *Contents: write* on that repo as `GH_TOKEN` (secret `RELEASES_TOKEN`), and change the repo name in `--download-url-prefix` and in `SUFeedURL`.
+1. **Public releases-only repo** (recommended): e.g. `hologram-3x/wabbit-releases`, empty except for Releases. In `ci.yml` add `--repo hologram-3x/wabbit-releases` to `gh release create`, use a fine-grained PAT with *Contents: write* on that repo as `GH_TOKEN` (secret `RELEASES_TOKEN`), and change the repo name in `--download-url-prefix` and in `SUFeedURL`.
 2. **Hosted appcast**: publish `appcast.xml` and the DMG on any static HTTPS host (GitHub Pages of a public repo, S3/R2, the company site) and point `SUFeedURL` and `--download-url-prefix` there.
-3. **Make `hologram-3x/hours` public**: everything works as configured.
+3. **Make `hologram-3x/wabbit` public**: everything works as configured.
 
 Whatever the choice, `SUFeedURL` is baked into every shipped build, so pick it before v1.0: moving it later means one last release on the old feed that ships the new URL.
 

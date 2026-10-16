@@ -27,7 +27,7 @@
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Wabbit reads your calendar event when a call starts, to suggest the right Project. It works without it.</string>
 	<key>SUFeedURL</key>
-	<string>https://github.com/hologram-3x/hours/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/hologram-3x/wabbit/releases/latest/download/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
