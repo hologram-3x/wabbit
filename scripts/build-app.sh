@@ -23,6 +23,15 @@ ditto "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
 cp App/Info.plist "$APP/Contents/Info.plist"
 cp icons/wabbit-idle.svg icons/wabbit-running.svg "$APP/Contents/Resources/"
+# App icon: Liquid Glass App/Wabbit.icon -> Assets.car (+ Wabbit.icns fallback). actool ships with full Xcode only.
+if xcrun --find actool >/dev/null 2>&1; then
+  xcrun actool App/Wabbit.icon --compile "$APP/Contents/Resources" --platform macosx --minimum-deployment-target 14.0 \
+    --app-icon Wabbit --output-partial-info-plist build/icon-info.plist >/dev/null
+  plutil -replace CFBundleIconFile -string Wabbit "$APP/Contents/Info.plist"
+  plutil -replace CFBundleIconName -string Wabbit "$APP/Contents/Info.plist"
+else
+  echo "warning: actool not found (needs full Xcode); building without the app icon" >&2
+fi
 for b in "$BIN"/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/"; done
 [ -n "${VERSION:-}" ] && plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 [ -n "${BUILD_NUMBER:-}" ] && plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"
