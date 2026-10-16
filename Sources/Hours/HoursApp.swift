@@ -23,28 +23,8 @@ struct HoursApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Manage Clients", id: "manage") {
-            ManageView(model: model)
-        }
-
-        Window("Overview", id: "overview") {
-            OverviewView(model: model)
-        }
-
-        Window("Sessions", id: "sessions") {
-            SessionsView(model: model)
-        }
-
-        Window("Export", id: "export") {
-            ExportView(model: model)
-        }
-
-        Window("Backup", id: "backup") {
-            BackupView(model: model)
-        }
-
-        Window("Watched Apps", id: "watched") {
-            WatchedAppsView(model: model)
+        Window("Hours", id: "main") {
+            MainView(model: model)
         }
     }
 }
@@ -53,6 +33,79 @@ extension HoursApp {
     static func hm(_ t: TimeInterval) -> String {
         let m = max(0, Int(t / 60))
         return m < 60 ? "\(m)m" : "\(m / 60)h\(String(format: "%02d", m % 60))"
+    }
+}
+
+enum Pane: Hashable, Identifiable {
+    case overview, sessions, export, clients, watched, config, backup
+    var id: Self { self }
+    static let sections: [(title: String, panes: [Pane])] = [
+        ("Data", [.overview, .sessions, .export]),
+        ("Setup", [.clients, .watched]),
+        ("Settings", [.config, .backup]),
+    ]
+    var title: String {
+        switch self {
+        case .overview: "Overview"
+        case .sessions: "Sessions"
+        case .export: "Export"
+        case .clients: "Clients & Projects"
+        case .watched: "Watched Apps"
+        case .config: "Config"
+        case .backup: "Backup & Restore"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .overview: "chart.bar"
+        case .sessions: "list.bullet.rectangle"
+        case .export: "square.and.arrow.up"
+        case .clients: "person.2"
+        case .watched: "macwindow"
+        case .config: "gearshape"
+        case .backup: "externaldrive"
+        }
+    }
+}
+
+/// The one app window: sidebar of panes, detail on the right.
+struct MainView: View {
+    @Bindable var model: TrayModel
+
+    var body: some View {
+        NavigationSplitView {
+            List(selection: $model.pane) {
+                ForEach(Pane.sections, id: \.title) { section in
+                    Section(section.title) {
+                        ForEach(section.panes) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                    }
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+        } detail: {
+            detail.navigationTitle(model.pane.title).errorAlert($model.error)
+                .toolbarBackground(.hidden, for: .windowToolbar)
+        }
+        .frame(minWidth: 820, minHeight: 520)
+    }
+
+    @ViewBuilder private var detail: some View {
+        switch model.pane {
+        case .overview: OverviewView(model: model)
+        case .sessions: SessionsView(model: model)
+        case .export: ExportView(model: model)
+        case .clients: ManageView(model: model)
+        case .watched: WatchedAppsView(model: model)
+        case .config: ConfigView(model: model)
+        case .backup: BackupView(model: model)
+        }
+    }
+}
+
+extension View {
+    /// Shows `error` as an alert; dismissing it clears it.
+    func errorAlert(_ error: Binding<String?>) -> some View {
+        alert(error.wrappedValue ?? "", isPresented: Binding(get: { error.wrappedValue != nil }, set: { if !$0 { error.wrappedValue = nil } })) {}
     }
 }
 
@@ -80,7 +133,7 @@ final class TrayModel {
     /// Refreshed every 60 s while a Session runs, and on wake; drives the tray label.
     private(set) var now = Date()
     private var tick: Timer?
-    static let quickStartCount = 5
+    static let quickStartCount = 3
     private(set) var allProjects: [Project] = []
     private(set) var allClients: [Client] = []
     private(set) var closedIds: Set<Int64> = []
@@ -94,6 +147,13 @@ final class TrayModel {
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
+    /// Main window's selected pane; the tray can open it at a given one.
+    var pane: Pane = .overview
+    private(set) var amountMode = AmountMode.gross
+    private(set) var taxBps = 0
+    private(set) var defaultRateCents: Int?
+    private(set) var roundingStepMinutes = 60
+    private(set) var roundingThresholdMinutes = 15
     /// Meeting Prompt (ticket 08): see MediaDetection.swift.
     var meetingPrompt: MeetingPrompt?
     var meetingPanel: NSPanel?
@@ -169,6 +229,11 @@ final class TrayModel {
             watchedApps = try tracker.watchedApps()
             watchedDelaySeconds = Int(try tracker.watchedAppDelay())
             titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
+            amountMode = try tracker.amountMode()
+            taxBps = try tracker.taxRateBps()
+            defaultRateCents = try tracker.defaultRateCents()
+            roundingStepMinutes = Int(try tracker.roundingStep() / 60)
+            roundingThresholdMinutes = Int(try tracker.roundingThreshold() / 60)
         }
         updateTick()
         updateMeetingPanel()
@@ -198,15 +263,22 @@ final class TrayModel {
     }
     func addDomain(_ c: Client, _ d: String) { act { try tracker.addDomain(clientId: c.id!, d) } }
     func removeDomain(_ c: Client, _ d: String) { act { try tracker.removeDomain(clientId: c.id!, d) } }
-    func act(_ body: () throws -> Void) { attempt(body); refresh() }
+    /// Runs `body`, then refreshes; a failure stays in `error` (refresh would otherwise clear it).
+    func act(_ body: () throws -> Void) {
+        let ok = attempt(body), e = error
+        refresh()
+        if !ok { error = e }
+    }
     func createClient(_ name: String, firstProject: String) -> Bool {
         attempt { try tracker.createClient(name: name, firstProject: firstProject) }
     }
 
-    func setIdleThresholdMinutes(_ minutes: Int) {
-        attempt { try tracker.setIdleThreshold(TimeInterval(minutes * 60)) }
-        refresh()
-    }
+    func setIdleThresholdMinutes(_ minutes: Int) { act { try tracker.setIdleThreshold(TimeInterval(minutes * 60)) } }
+    func setAmountMode(_ m: AmountMode) { act { try tracker.setAmountMode(m) } }
+    func setTaxRateBps(_ bps: Int) { act { try tracker.setTaxRateBps(bps) } }
+    func setDefaultRateCents(_ cents: Int?) { act { try tracker.setDefaultRateCents(cents) } }
+    func setRoundingStepMinutes(_ m: Int) { act { try tracker.setRoundingStep(TimeInterval(m * 60)) } }
+    func setRoundingThresholdMinutes(_ m: Int) { act { try tracker.setRoundingThreshold(TimeInterval(m * 60)) } }
 
     func resolveIdle(_ resolution: IdleResolution) {
         attempt {
@@ -294,129 +366,172 @@ final class TrayModel {
     }
 }
 
+extension Color {
+    private static func adaptive(light: UInt32, dark: UInt32, lightAlpha: Double = 1, darkAlpha: Double = 1) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let hex = isDark ? dark : light
+            return NSColor(red: CGFloat((hex >> 16) & 255) / 255, green: CGFloat((hex >> 8) & 255) / 255,
+                           blue: CGFloat(hex & 255) / 255, alpha: isDark ? darkAlpha : lightAlpha)
+        })
+    }
+    static let trayBody = adaptive(light: 0xFAFAF8, dark: 0x232325)
+    static let trayBand = adaptive(light: 0xF1F0EE, dark: 0x2C2C2E)
+    static let trayHover = adaptive(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.05, darkAlpha: 0.07)
+}
+
+extension View {
+    /// Compact card for a tray prompt, sitting in the header band.
+    func trayCard() -> some View {
+        padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.trayBody, in: RoundedRectangle(cornerRadius: 8))
+            .controlSize(.small)
+    }
+}
+
+/// A full-width row with a hover highlight.
+private struct TrayRow<Content: View>: View {
+    @ViewBuilder let content: Content
+    @State private var hovering = false
+    var body: some View {
+        content
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(hovering ? Color.trayHover : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+    }
+}
+
 struct TrayView: View {
     let model: TrayModel
     @Environment(\.openWindow) private var openWindow
-    @State private var newClient = ""
-    @State private var firstProject = ""
 
-    private static let thresholdChoices = [5, 10, 15, 20, 30, 45, 60]
+    /// Opens the main window at a pane (nil: its last one).
+    private func open(_ pane: Pane?) {
+        if let pane { model.pane = pane }
+        openWindow(id: "main")
+        NSApplication.shared.activate()
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if model.meetingPrompt != nil {
-                MeetingPromptView(model: model)
-                Divider()
-            }
+        VStack(spacing: 0) {
+            header
+            VStack(alignment: .leading, spacing: 2) { recent }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.trayBody)
+            Divider()
+            footer
+        }
+        .frame(width: 320)
+        .background(Color.trayBody)
+        .ignoresSafeArea()
+    }
+
+    private var header: some View {
+        VStack(spacing: 8) {
+            if model.meetingPrompt != nil { MeetingPromptView(model: model) }
             if let prompt = model.idlePrompt {
                 idlePromptSection(prompt)
-                Divider()
             } else if let split = model.splitIdleSession {
                 splitFollowUpSection(split)
-                Divider()
             } else if let watched = model.watchedPrompt {
                 WatchedAppPromptSection(model: model, prompt: watched)
-                Divider()
             }
-
             if let running = model.running {
                 HStack {
-                    VStack(alignment: .leading) {
-                        Text(model.label(for: running.projectId)).bold()
-                        Text(running.start, style: .timer).monospacedDigit()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.label(for: running.projectId)).font(.headline).lineLimit(1)
+                        Text(running.start, style: .timer).monospacedDigit().foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Stop") { model.stop(); model.refresh() }
-                        .keyboardShortcut(.defaultAction)
+                    Button { model.stop(); model.refresh() } label: {
+                        Image(systemName: "stop.circle.fill").font(.system(size: 28)).foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                    .help("Stop")
+                    .accessibilityLabel("Stop")
                 }
-                Divider()
+            } else {
+                Text("Not tracking").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.trayBand)
+    }
 
-            if model.projects.isEmpty {
-                Text("Create a Client and its first Project to start tracking.")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(model.quickStart) { project in
-                HStack {
-                    Text(model.label(for: project.id!))
-                    Spacer()
-                    Button("Start") { model.start(project); model.refresh() }
-                        .disabled(model.running?.projectId == project.id)
+    @ViewBuilder
+    private var recent: some View {
+        if model.projects.isEmpty {
+            Text("Add a Client and its first Project to start tracking.")
+                .font(.caption).foregroundStyle(.secondary).padding(8)
+        } else {
+            Text("Recent").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.bottom, 2)
+        }
+        ForEach(model.quickStart) { project in
+            let isRunning = model.running?.projectId == project.id
+            Button { model.start(project); model.refresh() } label: {
+                TrayRow {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(project.name).lineLimit(1)
+                            Text(model.clients[project.clientId] ?? "?").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                        Image(systemName: isRunning ? "checkmark.circle.fill" : "play.circle")
+                            .font(.system(size: 18)).foregroundStyle(isRunning ? Color.accentColor : .secondary)
+                    }
                 }
             }
-            let others = model.projects.filter { p in !model.quickStart.contains { $0.id == p.id } }
-            if !others.isEmpty {
-                Menu("Other…") {
+            .buttonStyle(.plain)
+            .disabled(isRunning)
+        }
+        let others = model.projects.filter { p in !model.quickStart.contains { $0.id == p.id } }
+        if !others.isEmpty {
+            TrayRow {
+                Menu {
                     ForEach(others) { project in
                         Button(model.label(for: project.id!)) { model.start(project); model.refresh() }
                     }
+                } label: {
+                    HStack { Text("Other…"); Spacer(); Image(systemName: "chevron.right").font(.caption) }
                 }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
             }
-
-            Divider()
-            Text("New Client").font(.headline)
-            TextField("Client name", text: $newClient)
-            TextField("First Project", text: $firstProject)
-            Button("Create Client") {
-                if model.createClient(newClient, firstProject: firstProject) {
-                    newClient = ""
-                    firstProject = ""
-                    model.refresh()
-                }
-            }
-            .disabled(newClient.trimmingCharacters(in: .whitespaces).isEmpty
-                || firstProject.trimmingCharacters(in: .whitespaces).isEmpty)
-
-            if let error = model.error {
-                Text(error).foregroundStyle(.red).font(.caption)
-            }
-
-            Divider()
-            Picker("Idle Threshold", selection: Binding(
-                get: { model.idleThresholdMinutes },
-                set: { model.setIdleThresholdMinutes($0) }
-            )) {
-                ForEach(Self.thresholdChoices, id: \.self) { minutes in
-                    Text(minutes < 60 ? "\(minutes) min" : "1 h").tag(minutes)
-                }
-            }
-            Button("Manage Clients…") {
-                openWindow(id: "manage")
-                NSApplication.shared.activate()
-            }
-            Button("Overview…") {
-                openWindow(id: "overview")
-                NSApplication.shared.activate()
-            }
-            Button("Sessions…") {
-                openWindow(id: "sessions")
-                NSApplication.shared.activate()
-            }
-            Button("Watched Apps…") {
-                openWindow(id: "watched")
-                NSApplication.shared.activate()
-            }
-            Button("Export…") {
-                openWindow(id: "export")
-                NSApplication.shared.activate()
-            }
-            Button("Backup & Restore…") {
-                openWindow(id: "backup")
-                NSApplication.shared.activate()
-            }
-            Button("Check for Updates…") { model.updater.checkForUpdates(nil) }
-                .disabled(!TrayModel.updatesEnabled)
-            Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))
-            Button("Quit Hours") { NSApplication.shared.terminate(nil) }
         }
-        .padding()
-        .frame(width: 300)
+        if let error = model.error {
+            Text(error).foregroundStyle(.red).font(.caption).padding(.horizontal, 8).padding(.top, 4)
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            footerButton("plus", "New Client or Project") { open(.clients) }
+            Spacer()
+            footerButton("gearshape", "Open Hours") { open(nil) }.keyboardShortcut(",")
+            Spacer()
+            footerButton("power", "Quit Hours") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
+        }
+        .padding(.horizontal, 32).padding(.vertical, 10)
+        .background(Color.trayBand)
+    }
+
+    private func footerButton(_ symbol: String, _ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 18)).frame(width: 32, height: 24) }
+            .buttonStyle(.plain)
+            .help(title)
+            .accessibilityLabel(title)
     }
 
     @ViewBuilder
     private func idlePromptSection(_ prompt: IdlePrompt) -> some View {
         let minutes = Int(prompt.idleEnd.timeIntervalSince(prompt.idleStart) / 60)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("You were idle \(minutes) min").font(.headline)
             Text("While tracking \(model.label(for: prompt.projectId)).")
                 .foregroundStyle(.secondary)
@@ -428,14 +543,12 @@ struct TrayView: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(8)
-        .background(.quaternary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .trayCard()
     }
 
     @ViewBuilder
     private func splitFollowUpSection(_ session: Session) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Idle Session").font(.headline)
             Text("Assign to a Project or drop it.")
                 .foregroundStyle(.secondary)
@@ -448,16 +561,33 @@ struct TrayView: View {
             }
             Button("Drop", role: .destructive) { model.dropSplitIdle() }
         }
-        .padding(8)
-        .background(.quaternary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .trayCard()
     }
 }
 
 struct ManageView: View {
     let model: TrayModel
+    @State private var newClient = ""
+    @State private var firstProject = ""
+    @State private var editing: Project?
+
     var body: some View {
         List {
+            Section("New Client") {
+                HStack {
+                    TextField("Client name", text: $newClient)
+                    TextField("First Project", text: $firstProject)
+                    Button("Create") {
+                        if model.createClient(newClient, firstProject: firstProject) {
+                            newClient = ""
+                            firstProject = ""
+                            model.refresh()
+                        }
+                    }
+                    .disabled(newClient.trimmingCharacters(in: .whitespaces).isEmpty
+                        || firstProject.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
             ForEach(model.allClients) { client in
                 Section {
                     ClientRow(model: model, client: client)
@@ -465,15 +595,15 @@ struct ManageView: View {
                         HStack {
                             NameField(text: p.name) { model.renameProject(p, $0) }
                                 .opacity(model.closedIds.contains(p.id!) ? 0.5 : 1)
+                            Button("Rate & Billing…") { editing = p }
                             Button(p.closedAt == nil ? "Close" : "Reopen") { model.setClosed(p, p.closedAt == nil) }
                         }
                     }
                     NameField(text: "", prompt: "Add Project") { model.addProject(client, $0) }
                 }
             }
-            if let error = model.error { Text(error).foregroundStyle(.red) }
         }
-        .frame(minWidth: 460, minHeight: 360)
+        .sheet(item: $editing) { p in MoneyEditor(model: model, project: p) { editing = nil } }
     }
 }
 

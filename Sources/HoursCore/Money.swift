@@ -94,6 +94,26 @@ extension Tracker {
         try db.write { try Self.setSetting($0, "amountMode", mode.rawValue) }
     }
 
+    /// The freelancer's own hourly rate; new Projects start from it. Nil when unset.
+    public func defaultRateCents() throws -> Int? {
+        try db.read { try Self.setting($0, "defaultRateCents").flatMap(Int.init) }
+    }
+
+    /// Nil removes the setting. Existing Projects are never changed.
+    public func setDefaultRateCents(_ cents: Int?) throws {
+        if let c = cents, c < 0 { throw HoursError.invalidMoney }
+        try db.write {
+            if let c = cents { try Self.setSetting($0, "defaultRateCents", String(c)) }
+            else { try $0.execute(sql: "DELETE FROM setting WHERE key = ?", arguments: ["defaultRateCents"]) }
+        }
+    }
+
+    /// A new Project inherits the Default Rate, if set.
+    static func applyDefaultRate(_ db: Database, to project: Project) throws {
+        guard let r = try setting(db, "defaultRateCents").flatMap(Int.init) else { return }
+        try db.execute(sql: "UPDATE project SET rateCents = ? WHERE id = ?", arguments: [r, project.id!])
+    }
+
     static func setting(_ db: Database, _ key: String) throws -> String? {
         try String.fetchOne(db, sql: "SELECT value FROM setting WHERE key = ?", arguments: [key])
     }

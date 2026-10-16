@@ -18,6 +18,7 @@ _Avoid_: Entry, log, timer, timesheet row
 
 **Rate**:
 The hourly price agreed for a Project.
+New Projects start from the Default Rate (the freelancer's own hourly price), set once in Config.
 _Avoid_: Price, fee, tariff
 
 **Quick Start**:

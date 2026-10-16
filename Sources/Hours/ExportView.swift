@@ -12,8 +12,6 @@ struct ExportView: View {
     @State private var from = Calendar.current.date(byAdding: .month, value: -1, to: .now)!
     @State private var to = Date.now
     @State private var mode = ExportMode.precise
-    @State private var stepMinutes = 60
-    @State private var thresholdMinutes = 15
     @State private var message: String?
 
     private enum ScopeKind: String, CaseIterable, Identifiable {
@@ -60,33 +58,23 @@ struct ExportView: View {
             }.pickerStyle(.segmented)
 
             if mode == .rounded {
-                Picker("Step", selection: $stepMinutes) {
-                    Text("30 min").tag(30)
-                    Text("1 h").tag(60)
-                }
-                Picker("Threshold", selection: $thresholdMinutes) {
-                    ForEach([5, 10, 15, 20, 30], id: \.self) { m in
-                        Text("\(m) min").tag(m)
-                    }
-                }
+                Text("Each Session rounds to \(model.roundingStepMinutes < 60 ? "\(model.roundingStepMinutes) min" : "1 h") steps, down when at most \(model.roundingThresholdMinutes) min past. Change in Config.")
+                    .foregroundStyle(.secondary).font(.caption)
             }
-
-            Button("Save CSV…") { save() }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!canSave)
 
             if let message {
                 Text(message).foregroundStyle(.secondary).font(.caption)
             }
         }
         .formStyle(.grouped)
-        .padding()
-        .frame(minWidth: 420, minHeight: 280)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Save CSV…") { save() }.keyboardShortcut(.defaultAction).disabled(!canSave)
+            }
+        }
         .onAppear {
             projectId = model.allProjects.first?.id
             clientId = model.allClients.first?.id
-            stepMinutes = Int(((try? model.tracker.roundingStep()) ?? 3600) / 60)
-            thresholdMinutes = Int(((try? model.tracker.roundingThreshold()) ?? 900) / 60)
         }
     }
 
@@ -105,8 +93,6 @@ struct ExportView: View {
 
     private func save() {
         do {
-            try model.tracker.setRoundingStep(TimeInterval(stepMinutes * 60))
-            try model.tracker.setRoundingThreshold(TimeInterval(thresholdMinutes * 60))
             let scope: ExportScope = switch kind {
             case .project: .project(projectId!)
             case .client: .client(clientId!)
@@ -130,7 +116,7 @@ struct ExportView: View {
             model.error = nil
         } catch {
             model.error = "\(error)"
-            message = "Export failed."
+            message = nil
         }
     }
 }

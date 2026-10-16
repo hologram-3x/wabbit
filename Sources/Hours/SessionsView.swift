@@ -1,78 +1,84 @@
 import HoursCore
 import SwiftUI
 
-/// Sessions grouped per day or per Project, with add/edit/delete. Added Sessions are marked Manual.
+/// Sessions in a sortable table, filterable by Project, with add/edit/delete. Added Sessions are marked Manual.
 struct SessionsView: View {
     let model: TrayModel
     @State private var sessions: [Session] = []
-    @State private var byProject = false
+    @State private var filter: Int64?
+    @State private var sortOrder = [KeyPathComparator(\Row.start, order: .reverse)]
+    @State private var selection = Set<Int64>()
     @State private var editing: Session?
+    @State private var adding = false
     @State private var error: String?
-    // Add form. Defaults to yesterday 09:00-11:00: pick a Project, press Add.
-    @State private var projectId: Int64?
-    @State private var day = Calendar.current.date(byAdding: .day, value: -1, to: .now)!
-    @State private var startTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now)!
-    @State private var endTime = Calendar.current.date(bySettingHour: 11, minute: 0, second: 0, of: .now)!
+
+    private struct Row: Identifiable {
+        let s: Session
+        let project: String
+        let hours: Double
+        var id: Int64 { s.id! }
+        var start: Date { s.start }
+        var end: Date { s.end ?? .distantFuture }
+    }
+
+    private var rows: [Row] {
+        sessions.filter { filter == nil || $0.projectId == filter }
+            .map { Row(s: $0, project: model.label(forAny: $0.projectId), hours: model.tracker.duration(of: $0) / 3600) }
+            .sorted(using: sortOrder)
+    }
 
     var body: some View {
-        VStack(alignment: .leading) {
-            HStack {
-                Picker("Project", selection: $projectId) {
-                    ForEach(model.projects) { Text(model.label(for: $0.id!)).tag(Optional($0.id!)) }
-                }.frame(maxWidth: 260)
-                DatePicker("", selection: $day, displayedComponents: .date).labelsHidden()
-                DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute).labelsHidden()
-                DatePicker("", selection: $endTime, displayedComponents: .hourAndMinute).labelsHidden()
-                Button("Add") { add() }.disabled(projectId == nil).keyboardShortcut(.defaultAction)
+        Table(rows, selection: $selection, sortOrder: $sortOrder) {
+            TableColumn("Date", value: \.start) { Text($0.start.formatted(date: .abbreviated, time: .omitted)) }
+            TableColumn("Start") { Text($0.start.formatted(date: .omitted, time: .shortened)) }
+            TableColumn("End", value: \.end) { Text($0.s.end?.formatted(date: .omitted, time: .shortened) ?? "running") }
+            TableColumn("Duration", value: \.hours) {
+                Text(String(format: "%.2f h", $0.hours)).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
             }
-            Picker("Group by", selection: $byProject) {
-                Text("Day").tag(false)
-                Text("Project").tag(true)
-            }.pickerStyle(.segmented).frame(width: 200)
-            List {
-                ForEach(groups, id: \.title) { g in
-                    Section(g.title) { ForEach(g.sessions) { row($0) } }
-                }
+            TableColumn("Project", value: \.project) { Text($0.project) }
+            TableColumn("Manual") { r in
+                if r.s.manual { Image(systemName: "hand.raised").help("Added by hand").accessibilityLabel("Manual") }
             }
-            if let e = error ?? model.error { Text(e).foregroundStyle(.red) }
+            .width(56)
         }
-        .padding()
-        .frame(minWidth: 640, minHeight: 420)
-        .onAppear { model.refresh(); projectId = projectId ?? model.projects.first?.id; load() }
+        .contextMenu(forSelectionType: Int64.self) { ids in
+            if let s = finished(ids), ids.count == 1 { Button("Edit…") { editing = s } }
+            if finished(ids) != nil { Button("Delete", role: .destructive) { delete(ids) } }
+        } primaryAction: { ids in
+            if ids.count == 1 { editing = finished(ids) }
+        }
+        .onDeleteCommand { delete(selection) }
+        .toolbar {
+            ToolbarItemGroup {
+                Picker("Project", selection: $filter) {
+                    Text("All Projects").tag(Int64?.none)
+                    ForEach(model.allProjects) { Text(model.label(forAny: $0.id!)).tag(Int64?.some($0.id!)) }
+                }
+                Button("Add Session", systemImage: "plus") { adding = true }
+                    .disabled(model.projects.isEmpty)
+            }
+        }
+        .errorAlert($error)
+        .onAppear { model.refresh(); load() }
         .sheet(item: $editing) { s in
             SessionEditor(model: model, session: s) { editing = nil; load() }
         }
-    }
-
-    private var groups: [(title: String, sessions: [Session])] {
-        if byProject {
-            Dictionary(grouping: sessions, by: \.projectId)
-                .map { (model.label(forAny: $0.key), $0.value) }.sorted { $0.0 < $1.0 }
-        } else {
-            Dictionary(grouping: sessions) { Calendar.current.startOfDay(for: $0.start) }
-                .sorted { $0.key > $1.key }.map { ($0.key.formatted(date: .complete, time: .omitted), $0.value) }
+        .sheet(isPresented: $adding) {
+            SessionEditor(model: model, session: nil) { adding = false; load() }
         }
     }
 
-    private func row(_ s: Session) -> some View {
-        HStack {
-            Text(s.start.formatted(date: byProject ? .abbreviated : .omitted, time: .shortened)
-                + " – " + (s.end?.formatted(date: .omitted, time: .shortened) ?? "running"))
-            if !byProject { Text(model.label(forAny: s.projectId)).foregroundStyle(.secondary) }
-            if s.manual { Text("Manual").font(.caption).padding(.horizontal, 4).background(.quaternary, in: Capsule()) }
-            Spacer()
-            Text(String(format: "%.2f h", model.tracker.duration(of: s) / 3600)).monospacedDigit()
-            if s.end != nil {
-                Button("Edit") { editing = s }
-                Button("Delete", role: .destructive) { run { try model.tracker.deleteSession(id: s.id!) } }
-            }
-        }
+    /// The first selected Session if all are finished (a running Session can't be edited or deleted here).
+    private func finished(_ ids: Set<Int64>) -> Session? {
+        let picked = sessions.filter { ids.contains($0.id!) }
+        return picked.allSatisfy { $0.end != nil } ? picked.first : nil
     }
 
-    private func add() {
-        guard let projectId else { return }
-        let (s, e) = Self.combine(day: day, start: startTime, end: endTime)
-        run { try model.tracker.addManualSession(projectId: projectId, start: s, end: e) }
+    private func delete(_ ids: Set<Int64>) {
+        guard finished(ids) != nil else { return }
+        do { for id in ids { try model.tracker.deleteSession(id: id) } } catch { self.error = SessionsView.message(error) }
+        selection = []
+        load()
     }
 
     /// End at or before start means the Session crosses midnight; it still belongs to `day`.
@@ -88,11 +94,6 @@ struct SessionsView: View {
         return (s, e)
     }
 
-    private func run(_ body: () throws -> Void) {
-        do { try body(); error = nil } catch { self.error = SessionsView.message(error) }
-        load()
-    }
-
     static func message(_ error: Error) -> String {
         if case HoursError.sessionOverlap(_, let label) = error { return "Overlaps another Session: \(label)" }
         return "\(error)"
@@ -101,34 +102,61 @@ struct SessionsView: View {
     private func load() { sessions = (try? model.tracker.allSessions()) ?? [] }
 }
 
+/// Edits a Session, or adds a Manual one when `session` is nil (defaults to yesterday 09:00-11:00).
 private struct SessionEditor: View {
     let model: TrayModel
-    let session: Session
+    let session: Session?
     let done: () -> Void
     @State private var projectId: Int64?
     @State private var start = Date()
     @State private var end = Date()
+    @State private var day = Calendar.current.date(byAdding: .day, value: -1, to: .now)!
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        Form {
             Picker("Project", selection: $projectId) {
                 ForEach(model.projects) { Text(model.label(for: $0.id!)).tag(Optional($0.id!)) }
             }
-            DatePicker("Start", selection: $start)
-            DatePicker("End", selection: $end)
-            if let error { Text(error).foregroundStyle(.red) }
-            HStack {
-                Button("Cancel", action: done).keyboardShortcut(.cancelAction)
-                Button("Save") {
-                    do {
-                        try model.tracker.editSession(id: session.id!, projectId: projectId ?? session.projectId, start: start, end: end)
-                        done()
-                    } catch { self.error = SessionsView.message(error) }
-                }.keyboardShortcut(.defaultAction)
+            if session == nil {
+                DatePicker("Date", selection: $day, displayedComponents: .date)
+                DatePicker("Start", selection: $start, displayedComponents: .hourAndMinute)
+                DatePicker("End", selection: $end, displayedComponents: .hourAndMinute)
+            } else {
+                DatePicker("Start", selection: $start)
+                DatePicker("End", selection: $end)
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+        }
+        .formStyle(.grouped)
+        .frame(width: 420)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: done).keyboardShortcut(.cancelAction) }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(session == nil ? "Add" : "Save", action: save).keyboardShortcut(.defaultAction).disabled(projectId == nil)
             }
         }
-        .padding().frame(width: 420)
-        .onAppear { projectId = session.projectId; start = session.start; end = session.end ?? .now }
+        .onAppear {
+            if let session {
+                projectId = session.projectId; start = session.start; end = session.end ?? .now
+            } else {
+                projectId = model.projects.first?.id
+                start = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now)!
+                end = Calendar.current.date(bySettingHour: 11, minute: 0, second: 0, of: .now)!
+            }
+        }
+    }
+
+    private func save() {
+        guard let projectId else { return }
+        do {
+            if let session {
+                try model.tracker.editSession(id: session.id!, projectId: projectId, start: start, end: end)
+            } else {
+                let (s, e) = SessionsView.combine(day: day, start: start, end: end)
+                try model.tracker.addManualSession(projectId: projectId, start: s, end: e)
+            }
+            done()
+        } catch { self.error = SessionsView.message(error) }
     }
 }

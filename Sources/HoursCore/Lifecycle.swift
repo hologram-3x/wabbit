@@ -80,6 +80,7 @@ extension Tracker {
         return try db.write { db in
             var p = Project(clientId: clientId, name: n)
             try p.insert(db)
+            try Self.applyDefaultRate(db, to: p)
             return p
         }
     }

@@ -64,9 +64,6 @@ struct WatchedAppsView: View {
 
     var body: some View {
         Form {
-            Stepper("Prompt after \(model.watchedDelaySeconds) s in front",
-                    value: Binding(get: { model.watchedDelaySeconds }, set: { model.setWatchedDelay($0) }),
-                    in: 5...600, step: 5)
             Section("Window titles") {
                 if AccessibilityAccess.granted {
                     Text("Accessibility is on: title rules can pick the Project.").font(.caption)
@@ -100,10 +97,8 @@ struct WatchedAppsView: View {
                     }
                 }
             }
-            if let error = model.error { Text(error).foregroundStyle(.red) }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 460, minHeight: 320)
         .onAppear { installed = InstalledApp.scan() }
         .onDisappear { installed = [] }
     }
@@ -162,7 +157,7 @@ struct WatchedAppPromptSection: View {
     let prompt: WatchedAppPrompt
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Track time for \(prompt.appName)?").font(.headline)
             if let id = prompt.projectId {
                 Button((model.running == nil ? "Start " : "Switch to ") + model.label(for: id)) {
@@ -177,9 +172,7 @@ struct WatchedAppPromptSection: View {
                 Button("Not today") { model.snoozeWatched(today: true) }
             }
         }
-        .padding(8)
-        .background(.quaternary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .trayCard()
     }
 }
 

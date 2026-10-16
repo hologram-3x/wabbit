@@ -106,6 +106,7 @@ public final class Tracker {
             try client.insert(db)
             var project = Project(clientId: client.id!, name: projectName)
             try project.insert(db)
+            try Self.applyDefaultRate(db, to: project)
             return (client, project)
         }
     }

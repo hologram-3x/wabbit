@@ -14,8 +14,7 @@ struct BackupView: View {
             Button("Restore…") { restore() }
             if let message { Text(message).foregroundStyle(.secondary) }
         }
-        .padding()
-        .frame(width: 340)
+        .formStyle(.grouped)
     }
 
     private func backUp() {
@@ -27,7 +26,7 @@ struct BackupView: View {
         do {
             try model.tracker.backup(to: url)
             message = "Backed up to \(url.lastPathComponent)."
-        } catch { message = "Backup failed: \(error.localizedDescription)" }
+        } catch { model.error = "Backup failed: \(error.localizedDescription)" }
     }
 
     private func restore() {
@@ -47,9 +46,9 @@ struct BackupView: View {
             model.refresh()
             message = "Restored from \(url.lastPathComponent)."
         } catch BackupError.newerThanApp {
-            message = "That backup was made by a newer version of Hours. Nothing was changed."
+            model.error = "That backup was made by a newer version of Hours. Nothing was changed."
         } catch BackupError.notABackup {
-            message = "That file isn't an Hours backup. Nothing was changed."
-        } catch { message = "Restore failed: \(error.localizedDescription). Your data was kept." }
+            model.error = "That file isn't an Hours backup. Nothing was changed."
+        } catch { model.error = "Restore failed: \(error.localizedDescription). Your data was kept." }
     }
 }

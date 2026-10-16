@@ -194,6 +194,7 @@ struct MeetingPromptView: View {
                     Button("Stop") { model.resolveMeeting(.stop) }.keyboardShortcut(.defaultAction)
                 }
             }
+            .trayCard()
         case nil:
             EmptyView()
         }
@@ -212,5 +213,6 @@ struct MeetingPromptView: View {
                 Button(action) { model.resolveMeeting(.start(projectId: chosen)) }.keyboardShortcut(.defaultAction)
             }
         }
+        .trayCard()
     }
 }

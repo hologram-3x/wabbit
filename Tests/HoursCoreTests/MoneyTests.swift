@@ -76,3 +76,28 @@ import HoursCore
     #expect(try h.tracker.taxRateBps() == 2200 && h.tracker.amountMode() == .net)
     #expect(throws: HoursError.invalidMoney) { try h.tracker.setTaxRateBps(10_000) }
 }
+
+@Test func defaultRateIsInheritedByNewProjectsOnly() throws {
+    let h = try Harness()
+    let t = h.tracker
+    #expect(try t.defaultRateCents() == nil)
+    let (c, p0) = try t.createClient(name: "ACME", firstProject: "Site")
+    #expect(try t.money(projectId: p0.id!).rateCents == nil)
+
+    try t.setDefaultRateCents(5000)
+    #expect(try t.defaultRateCents() == 5000)
+    let (_, p1) = try t.createClient(name: "Beta", firstProject: "App")
+    let p2 = try t.addProject(clientId: c.id!, name: "Blog")
+    #expect(try t.money(projectId: p1.id!).rateCents == 5000)
+    #expect(try t.money(projectId: p2.id!).rateCents == 5000)
+
+    try t.setDefaultRateCents(7000)
+    #expect(try t.money(projectId: p0.id!).rateCents == nil)
+    #expect(try t.money(projectId: p1.id!).rateCents == 5000)
+
+    try t.setDefaultRateCents(nil)
+    #expect(try t.defaultRateCents() == nil)
+    let p3 = try t.addProject(clientId: c.id!, name: "Docs")
+    #expect(try t.money(projectId: p3.id!).rateCents == nil)
+    #expect(throws: HoursError.invalidMoney) { try t.setDefaultRateCents(-1) }
+}
