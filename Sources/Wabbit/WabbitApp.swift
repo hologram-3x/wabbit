@@ -15,10 +15,13 @@ struct WabbitApp: App {
         } label: {
             if let running = model.running {
                 // `model.now` ticks once a minute while a Session runs (footprint budget).
-                Label("\(model.shortName(for: running.projectId)) \(Self.hm(model.now.timeIntervalSince(running.start)))",
-                      systemImage: "stop.circle.fill")
+                Label {
+                    Text("\(model.shortName(for: running.projectId)) \(Self.hm(model.now.timeIntervalSince(running.start)))")
+                } icon: {
+                    Self.trayIcon(Self.runningIcon, fallback: "stop.circle.fill")
+                }
             } else {
-                Image(systemName: "clock")
+                Self.trayIcon(Self.idleIcon, fallback: "clock")
             }
         }
         .menuBarExtraStyle(.window)
@@ -30,6 +33,21 @@ struct WabbitApp: App {
 }
 
 extension WabbitApp {
+    /// Menu-bar icons from the SVGs in the bundle (scripts/build-app.sh copies icons/), loaded once and drawn
+    /// as templates so macOS tints them; nil under `swift run`, which has no bundle resources.
+    static let idleIcon = templateSVG("wabbit-idle"), runningIcon = templateSVG("wabbit-running")
+
+    private static func templateSVG(_ name: String) -> NSImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "svg"), let img = NSImage(contentsOf: url) else { return nil }
+        img.isTemplate = true
+        img.size = NSSize(width: 16 * img.size.width / img.size.height, height: 16)
+        return img
+    }
+
+    @ViewBuilder static func trayIcon(_ image: NSImage?, fallback: String) -> some View {
+        if let image { Image(nsImage: image) } else { Image(systemName: fallback) }
+    }
+
     static func hm(_ t: TimeInterval) -> String {
         let m = max(0, Int(t / 60))
         return m < 60 ? "\(m)m" : "\(m / 60)h\(String(format: "%02d", m % 60))"

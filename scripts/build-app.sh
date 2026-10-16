@@ -22,6 +22,7 @@ ditto "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 # Wabbit isn't sandboxed, so Sparkle's XPC services are unused (sparkle-project.org/documentation/sandboxing).
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
 cp App/Info.plist "$APP/Contents/Info.plist"
+cp icons/wabbit-idle.svg icons/wabbit-running.svg "$APP/Contents/Resources/"
 for b in "$BIN"/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/"; done
 [ -n "${VERSION:-}" ] && plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 [ -n "${BUILD_NUMBER:-}" ] && plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"
