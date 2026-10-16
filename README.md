@@ -28,3 +28,7 @@ scripts/build-app.sh dmg       # also build/Wabbit.dmg
 ```
 
 Layout: one SwiftPM package. `Sources/WabbitCore` (domain and storage, no Apple-only imports), `Sources/Wabbit` (the menu-bar app), `Tests/WabbitCoreTests`, `App/Info.plist`. See [ADR 0002](./docs/adr/0002-swiftpm-app-bundle.md). Data lives in `~/Library/Application Support/Wabbit/hours.sqlite`. Signed and notarized releases: [docs/release.md](./docs/release.md).
+
+## License
+
+GPL-3.0, see [LICENSE](./LICENSE).
