@@ -26,7 +26,8 @@ final class CalendarAccess {
     private func hasAccess() async -> Bool {
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess: return true
-        case .notDetermined: return (try? await store.requestFullAccessToEvents()) ?? false
+        // Callback form: the async one sends the main-actor store off the actor, which Swift 6.0/6.1 rejects.
+        case .notDetermined: return await withCheckedContinuation { c in store.requestFullAccessToEvents { ok, _ in c.resume(returning: ok) } }
         default: return false
         }
     }
