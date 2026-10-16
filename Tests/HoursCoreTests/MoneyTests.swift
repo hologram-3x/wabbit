@@ -77,27 +77,40 @@ import HoursCore
     #expect(throws: HoursError.invalidMoney) { try h.tracker.setTaxRateBps(10_000) }
 }
 
-@Test func defaultRateIsInheritedByNewProjectsOnly() throws {
+@Test func defaultRateFillsNewAndRatelessProjectsOnly() throws {
     let h = try Harness()
     let t = h.tracker
     #expect(try t.defaultRateCents() == nil)
     let (c, p0) = try t.createClient(name: "ACME", firstProject: "Site")
+    let p1 = try t.addProject(clientId: c.id!, name: "App")
+    try t.setMoney(projectId: p1.id!, ProjectMoney(rateCents: 3000))
     #expect(try t.money(projectId: p0.id!).rateCents == nil)
 
-    try t.setDefaultRateCents(5000)
+    try t.setDefaultRateCents(5000)  // backfills NULL, keeps p1
     #expect(try t.defaultRateCents() == 5000)
-    let (_, p1) = try t.createClient(name: "Beta", firstProject: "App")
+    #expect(try t.money(projectId: p0.id!).rateCents == 5000)
+    #expect(try t.money(projectId: p1.id!).rateCents == 3000)
     let p2 = try t.addProject(clientId: c.id!, name: "Blog")
-    #expect(try t.money(projectId: p1.id!).rateCents == 5000)
     #expect(try t.money(projectId: p2.id!).rateCents == 5000)
 
-    try t.setDefaultRateCents(7000)
-    #expect(try t.money(projectId: p0.id!).rateCents == nil)
-    #expect(try t.money(projectId: p1.id!).rateCents == 5000)
+    try t.setDefaultRateCents(7000)  // everything has a Rate now: untouched
+    #expect(try t.money(projectId: p0.id!).rateCents == 5000)
 
-    try t.setDefaultRateCents(nil)
+    try t.setDefaultRateCents(nil)  // does not clear Project rates
     #expect(try t.defaultRateCents() == nil)
+    #expect(try t.money(projectId: p0.id!).rateCents == 5000)
     let p3 = try t.addProject(clientId: c.id!, name: "Docs")
     #expect(try t.money(projectId: p3.id!).rateCents == nil)
     #expect(throws: HoursError.invalidMoney) { try t.setDefaultRateCents(-1) }
+}
+
+@Test func notificationsDefaultOnAndPersist() throws {
+    let path = FileManager.default.temporaryDirectory.appending(path: "hours-test-notify-\(UUID()).sqlite").path
+    defer { try? FileManager.default.removeItem(atPath: path) }
+    let h = try Harness(path: path)
+    #expect(try NotifiedPrompt.allCases.allSatisfy { try h.tracker.notifies($0) })
+    try h.tracker.setNotifies(.idle, false)
+    let reopened = try Harness(path: path)
+    #expect(try !reopened.tracker.notifies(.idle))
+    #expect(try reopened.tracker.notifies(.meeting) && reopened.tracker.notifies(.watched))
 }

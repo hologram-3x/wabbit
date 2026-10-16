@@ -10,6 +10,9 @@ public enum Billing: Equatable, Sendable {
 
 public enum AmountMode: String, Sendable { case gross, net }
 
+/// Prompts that can post a notification.
+public enum NotifiedPrompt: String, CaseIterable, Sendable { case meeting, idle, watched }
+
 public struct ProjectMoney: Equatable, Sendable {
     public var rateCents: Int?     // per hour
     public var billing: Billing?   // nil = no Billing: no warnings
@@ -73,6 +76,14 @@ func registerMoneyMigration(_ m: inout DatabaseMigrator) {
     }
 }
 
+/// One-time backfill: Projects without a Rate get the stored Default Rate.
+func registerDefaultRateBackfillMigration(_ m: inout DatabaseMigrator) {
+    m.registerMigration("v9-default-rate-backfill") { db in
+        guard let r = try Tracker.setting(db, "defaultRateCents").flatMap(Int.init) else { return }
+        try db.execute(sql: "UPDATE project SET rateCents = ? WHERE rateCents IS NULL", arguments: [r])
+    }
+}
+
 extension Tracker {
     // MARK: Settings (defaults: Tax Rate 0, Gross)
 
@@ -94,16 +105,28 @@ extension Tracker {
         try db.write { try Self.setSetting($0, "amountMode", mode.rawValue) }
     }
 
+    /// Whether a prompt also posts a macOS notification (default on). The tray shows it either way.
+    public func notifies(_ prompt: NotifiedPrompt) throws -> Bool {
+        try db.read { try Self.setting($0, "notify.\(prompt.rawValue)") != "0" }
+    }
+
+    public func setNotifies(_ prompt: NotifiedPrompt, _ on: Bool) throws {
+        try db.write { try Self.setSetting($0, "notify.\(prompt.rawValue)", on ? "1" : "0") }
+    }
+
     /// The freelancer's own hourly rate; new Projects start from it. Nil when unset.
     public func defaultRateCents() throws -> Int? {
         try db.read { try Self.setting($0, "defaultRateCents").flatMap(Int.init) }
     }
 
-    /// Nil removes the setting. Existing Projects are never changed.
+    /// Nil removes the setting and leaves Projects alone. A value also fills every Project without a Rate (never overwrites one).
     public func setDefaultRateCents(_ cents: Int?) throws {
         if let c = cents, c < 0 { throw HoursError.invalidMoney }
         try db.write {
-            if let c = cents { try Self.setSetting($0, "defaultRateCents", String(c)) }
+            if let c = cents {
+                try Self.setSetting($0, "defaultRateCents", String(c))
+                try $0.execute(sql: "UPDATE project SET rateCents = ? WHERE rateCents IS NULL", arguments: [c])
+            }
             else { try $0.execute(sql: "DELETE FROM setting WHERE key = ?", arguments: ["defaultRateCents"]) }
         }
     }

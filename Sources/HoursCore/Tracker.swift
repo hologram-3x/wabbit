@@ -80,6 +80,7 @@ public final class Tracker {
         registerExportMigration(&m)
         m.registerMigration("v7-watched-apps", migrate: migrateWatchedApps)
         m.registerMigration("v8-title-rules", migrate: migrateTitleRules)
+        registerDefaultRateBackfillMigration(&m)
         return m
     }
 

@@ -143,16 +143,18 @@ extension TrayModel {
         refresh()
     }
 
-    /// The prompt also floats over other apps (a call app is usually in front); the panel exists only
-    /// while a prompt is pending (footprint: no windows until needed).
+    /// The Meeting Prompt arrives as a notification (Notifications.swift); this only closes the picker panel
+    /// once the prompt is gone.
     func updateMeetingPanel() {
         meetingPrompt = tracker.pendingMeetingPrompt()
-        guard meetingPrompt != nil else {
-            meetingPanel?.close()
-            meetingPanel = nil
-            return
-        }
-        guard meetingPanel == nil else { return }
+        if meetingPrompt == nil { meetingPanel?.close(); meetingPanel = nil }
+    }
+
+    /// The picker panel, on demand ("Other Project…" or a click on the notification). It floats over other
+    /// apps (a call app is usually in front) and exists only while a prompt is pending.
+    func showMeetingPanel() {
+        guard meetingPrompt != nil else { return }
+        if let meetingPanel { meetingPanel.orderFrontRegardless(); return }
         let panel = NSPanel(contentRect: .zero, styleMask: [.titled, .nonactivatingPanel, .utilityWindow],
                             backing: .buffered, defer: true)
         panel.title = "Hours"

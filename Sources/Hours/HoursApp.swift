@@ -37,12 +37,12 @@ extension HoursApp {
 }
 
 enum Pane: Hashable, Identifiable {
-    case overview, sessions, export, clients, watched, config, backup
+    case overview, sessions, export, clients, watched, config, notifications, backup
     var id: Self { self }
     static let sections: [(title: String, panes: [Pane])] = [
         ("Data", [.overview, .sessions, .export]),
         ("Setup", [.clients, .watched]),
-        ("Settings", [.config, .backup]),
+        ("Settings", [.config, .notifications, .backup]),
     ]
     var title: String {
         switch self {
@@ -52,6 +52,7 @@ enum Pane: Hashable, Identifiable {
         case .clients: "Clients & Projects"
         case .watched: "Watched Apps"
         case .config: "Config"
+        case .notifications: "Notifications"
         case .backup: "Backup & Restore"
         }
     }
@@ -63,6 +64,7 @@ enum Pane: Hashable, Identifiable {
         case .clients: "person.2"
         case .watched: "macwindow"
         case .config: "gearshape"
+        case .notifications: "bell"
         case .backup: "externaldrive"
         }
     }
@@ -97,6 +99,7 @@ struct MainView: View {
         case .clients: ManageView(model: model)
         case .watched: WatchedAppsView(model: model)
         case .config: ConfigView(model: model)
+        case .notifications: NotificationsView(model: model)
         case .backup: BackupView(model: model)
         }
     }
@@ -124,6 +127,7 @@ final class TrayModel {
     private var watchedTimer: Timer?
     private var idlePoll: Timer?
     private var wasPastIdleThreshold = false
+    private var lastInputBeforeSleep: Date?
 
     private(set) var projects: [Project] = []
     private(set) var clients: [Int64: String] = [:]
@@ -139,8 +143,11 @@ final class TrayModel {
     private(set) var closedIds: Set<Int64> = []
     private(set) var domains: [Int64: [String]] = [:]
     private(set) var idleThresholdMinutes: Int = 15
-    private(set) var idlePrompt: IdlePrompt?
-    private(set) var watchedPrompt: WatchedAppPrompt?
+    private(set) var idlePrompt: IdlePrompt? { didSet { if idlePrompt != oldValue { notifyIdle() } } }
+    private(set) var watchedPrompt: WatchedAppPrompt? { didSet { if watchedPrompt != oldValue { notifyWatched() } } }
+    /// Prompts that also post a macOS notification (Notifications.swift).
+    private(set) var notifyOn: Set<NotifiedPrompt> = []
+    let notifier = Notifier()
     private(set) var watchedApps: [WatchedApp] = []
     private(set) var watchedDelaySeconds = 30
     private(set) var titleRules: [String: [TitleRule]] = [:]
@@ -155,7 +162,7 @@ final class TrayModel {
     private(set) var roundingStepMinutes = 60
     private(set) var roundingThresholdMinutes = 15
     /// Meeting Prompt (ticket 08): see MediaDetection.swift.
-    var meetingPrompt: MeetingPrompt?
+    var meetingPrompt: MeetingPrompt? { didSet { if meetingPrompt != oldValue { notifyMeeting() } } }
     var meetingPanel: NSPanel?
     let calendar = CalendarAccess()
     private var media: MediaDetection?
@@ -177,6 +184,8 @@ final class TrayModel {
             fatalError("Cannot open the Hours database: \(error)")
         }
         tracker.connect(feed)
+        notifier.model = self
+        notifier.start()  // delegate set before any notification is posted
         Self.registerLoginItemOnFirstInstall()
         launchesAtLogin = SMAppService.mainApp.status == .enabled
         refresh()
@@ -186,8 +195,11 @@ final class TrayModel {
         scheduleWatchedCheck()
         // After sleep, timers are stale: re-read the running Session and the clock.
         NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in Task { @MainActor in self?.lastInputBeforeSleep = Date().addingTimeInterval(-Self.secondsSinceInput()) } }
+        NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in Task { @MainActor in self?.refresh() } }
+        ) { [weak self] _ in Task { @MainActor in self?.didWake() } }
     }
 
     /// One-shot timer for when the front app's delay is up; nothing runs while no app is waiting.
@@ -223,6 +235,7 @@ final class TrayModel {
             clients = Dictionary(uniqueKeysWithValues: try tracker.clients().map { ($0.id!, $0.name) })
             running = try tracker.runningSession()
             quickStart = try tracker.quickStartProjects(limit: Self.quickStartCount)
+            notifyOn = Set(try NotifiedPrompt.allCases.filter { try tracker.notifies($0) })
             idleThresholdMinutes = Int(try tracker.idleThreshold() / 60)
             idlePrompt = tracker.pendingIdlePrompt()
             watchedPrompt = tracker.pendingWatchedAppPrompt()
@@ -327,10 +340,25 @@ final class TrayModel {
         }
     }
 
-    private func pollIdle() {
+    /// Sleep counts as Idle: the input clock restarts on wake, so the stretch since the last input before
+    /// sleep is reported here; the next poll sees fresh input and raises the usual Idle prompt.
+    private func didWake() {
+        refresh()
+        if let last = lastInputBeforeSleep, Date().timeIntervalSince(last) >= TimeInterval(idleThresholdMinutes * 60) {
+            feed.emit(.userIdle(since: last))
+            wasPastIdleThreshold = true
+        }
+        lastInputBeforeSleep = nil
+        pollIdle()
+    }
+
+    private static func secondsSinceInput() -> TimeInterval {
         // ~0 as event type = any input (keyboard, mouse, …). No permission needed.
-        let anyEvent = CGEventType(rawValue: ~0)!
-        let idleSeconds = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyEvent)
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+    }
+
+    private func pollIdle() {
+        let idleSeconds = Self.secondsSinceInput()
         let threshold = TimeInterval(idleThresholdMinutes * 60)
         if idleSeconds >= threshold {
             let since = Date().addingTimeInterval(-idleSeconds)
@@ -411,7 +439,9 @@ struct TrayView: View {
     /// Opens the main window at a pane (nil: its last one).
     private func open(_ pane: Pane?) {
         if let pane { model.pane = pane }
+        let panel = NSApp.keyWindow  // the MenuBarExtra panel
         openWindow(id: "main")
+        panel?.orderOut(nil)
         NSApplication.shared.activate()
     }
 
@@ -426,8 +456,7 @@ struct TrayView: View {
             footer
         }
         .frame(width: 320)
-        .background(Color.trayBody)
-        .ignoresSafeArea()
+        .background(Color.trayBody.ignoresSafeArea())
     }
 
     private var header: some View {
@@ -461,7 +490,7 @@ struct TrayView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.trayBand)
+        .background(Color.trayBand.ignoresSafeArea())
     }
 
     @ViewBuilder
@@ -518,7 +547,7 @@ struct TrayView: View {
             footerButton("power", "Quit Hours") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
         }
         .padding(.horizontal, 32).padding(.vertical, 10)
-        .background(Color.trayBand)
+        .background(Color.trayBand.ignoresSafeArea())
     }
 
     private func footerButton(_ symbol: String, _ title: String, _ action: @escaping () -> Void) -> some View {

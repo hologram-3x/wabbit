@@ -14,13 +14,15 @@ struct ConfigView: View {
             Section("Money") {
                 TextField("Default Rate (€/h)", text: $rate, prompt: Text("None"))
                     .focused($focus, equals: .rate).onSubmit(saveRate)
-                Text("New Projects start at this Rate.").foregroundStyle(.secondary).font(.caption)
+                Text("New Projects and Projects without a Rate get this one.").foregroundStyle(.secondary).font(.caption)
                 TextField("Tax Rate %", text: $tax)
                     .focused($focus, equals: .tax).onSubmit(saveTax)
                 Picker("Amounts", selection: Binding(get: { model.amountMode }, set: { model.setAmountMode($0) })) {
                     Text("Gross").tag(AmountMode.gross)
                     Text("Net").tag(AmountMode.net)
                 }.pickerStyle(.segmented)
+                Text("Your hourly Rate for new Projects, and how tax is applied. Gross: amounts are what the Client pays; Net: what you keep after tax.")
+                    .foregroundStyle(.secondary).font(.caption)
             }
             Section("Tracking") {
                 Picker("Idle Threshold", selection: Binding(
@@ -46,6 +48,8 @@ struct ConfigView: View {
                 )) {
                     ForEach([5, 10, 15, 20, 30], id: \.self) { Text("\($0) min").tag($0) }
                 }
+                Text("Rounded CSV exports round each Session to the Step: down when at most the Threshold past it, up otherwise (e.g. 1h10 → 1h, 1h20 → 2h). Tracked time is always stored precisely.")
+                    .foregroundStyle(.secondary).font(.caption)
             }
             Section("App") {
                 Toggle("Launch at login", isOn: Binding(get: { model.launchesAtLogin }, set: { model.setLaunchAtLogin($0) }))
