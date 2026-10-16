@@ -1,3 +1,4 @@
+import AppKit
 import WabbitCore
 import SwiftUI
 
@@ -12,6 +13,22 @@ extension ProjectColor {
         case .purple: .purple
         case .gray: .gray
         }
+    }
+
+    /// A coloured, non-template dot: macOS menus draw SF Symbols monochrome and ignore `.tint`.
+    @MainActor func dotImage(checked: Bool = false) -> NSImage {
+        let color = NSColor(swiftUI)
+        let image = NSImage(size: NSSize(width: 12, height: 12), flipped: false) { r in
+            color.setFill()
+            NSBezierPath(ovalIn: r.insetBy(dx: 1, dy: 1)).fill()
+            if checked {
+                NSColor.white.setFill()
+                NSBezierPath(ovalIn: r.insetBy(dx: 4, dy: 4)).fill()
+            }
+            return true
+        }
+        image.isTemplate = false
+        return image
     }
 }
 
@@ -31,11 +48,10 @@ struct ProjectColorMenu: View {
         Menu {
             ForEach(ProjectColor.allCases, id: \.self) { c in
                 Button { pick(c) } label: {
-                    Label(c.rawValue.capitalized, systemImage: c == color ? "checkmark.circle.fill" : "circle.fill")
+                    Label { Text(c.rawValue.capitalized) } icon: { Image(nsImage: c.dotImage(checked: c == color)) }
                 }
-                .tint(c.swiftUI)
             }
-        } label: { ProjectDot(color: color) }
+        } label: { Image(nsImage: (color ?? .gray).dotImage()) }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()

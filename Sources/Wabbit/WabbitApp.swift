@@ -434,6 +434,7 @@ extension Color {
     static let trayBody = adaptive(light: 0xFAFAF8, dark: 0x232325)
     static let trayBand = adaptive(light: 0xF1F0EE, dark: 0x2C2C2E)
     static let trayHover = adaptive(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.05, darkAlpha: 0.07)
+    static let footerHover = adaptive(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.15, darkAlpha: 0.15)
 }
 
 extension View {
@@ -443,6 +444,22 @@ extension View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.trayBody, in: RoundedRectangle(cornerRadius: 8))
             .controlSize(.small)
+    }
+}
+
+/// Footer icon button: rounded highlight on hover (15% black in light mode, 15% white in dark).
+private struct FooterButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { HoverLabel(configuration: configuration) }
+
+    private struct HoverLabel: View {  // hover state lives in a view; ButtonStyle can't hold @State
+        let configuration: Configuration
+        @State private var hovering = false
+        var body: some View {
+            configuration.label
+                .background(hovering || configuration.isPressed ? Color.footerHover : .clear, in: RoundedRectangle(cornerRadius: 8))
+                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .onHover { hovering = $0 }
+        }
     }
 }
 
@@ -579,8 +596,8 @@ struct TrayView: View {
     }
 
     private func footerButton(_ symbol: String, _ title: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).font(.system(size: 18)).frame(width: 32, height: 24) }
-            .buttonStyle(.plain)
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 18)).frame(width: 40, height: 32) }
+            .buttonStyle(FooterButtonStyle())
             .help(title)
             .accessibilityLabel(title)
     }
