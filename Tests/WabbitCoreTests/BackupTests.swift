@@ -77,3 +77,15 @@ private func tmp(_ name: String = UUID().uuidString) -> URL {
     #expect(try h.tracker.roundingStep() == 3600)
     try h.tracker.start(projectId: try h.tracker.projects()[0].id!)
 }
+
+@Test func migrationsBackfillColourAndHourlyBilling() throws {
+    let db = try DatabaseQueue()
+    try Tracker.migrator.migrate(db, upTo: "v9-default-rate-backfill")
+    try db.write {
+        try $0.execute(sql: "INSERT INTO client (name) VALUES ('A')")
+        try $0.execute(sql: "INSERT INTO project (clientId, name) VALUES (1, 'x'), (1, 'y')")
+    }
+    try Tracker.migrator.migrate(db)
+    let rows = try db.read { try Row.fetchAll($0, sql: "SELECT color, billingKind FROM project") }
+    #expect(rows.allSatisfy { ($0["color"] as String?) != nil && ($0["billingKind"] as String?) == "hourly" })
+}

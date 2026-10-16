@@ -78,7 +78,7 @@ extension Tracker {
     public func addProject(clientId: Int64, name: String) throws -> Project {
         let n = try Self.trimmed(name)
         return try db.write { db in
-            var p = Project(clientId: clientId, name: n)
+            var p = Project(clientId: clientId, name: n, color: try Self.pickColor(db))
             try p.insert(db)
             try Self.applyDefaultRate(db, to: p)
             return p

@@ -87,3 +87,20 @@ import WabbitCore
     let reopened = try Harness(path: path)
     #expect(try reopened.tracker.domains(clientId: c.id!) == ["acme.io"])
 }
+
+@Test func newProjectsGetPaletteColourAndHourlyBilling() throws {
+    let h = try Harness()
+    let (c, p) = try h.tracker.createClient(name: "ACME", firstProject: "Web")
+    let p2 = try h.tracker.addProject(clientId: c.id!, name: "App")
+    #expect(p.color != nil && p2.color != nil && p.color != p2.color)
+    #expect(try h.tracker.projects().allSatisfy { $0.color != nil })
+    #expect(try h.tracker.money(projectId: p.id!).billing == .hourly)
+    #expect(try h.tracker.money(projectId: p2.id!).billing == .hourly)
+}
+
+@Test func setColorPersists() throws {
+    let h = try Harness()
+    let (_, p) = try h.tracker.createClient(name: "ACME", firstProject: "Web")
+    try h.tracker.setColor(projectId: p.id!, .purple)
+    #expect(try h.tracker.projects().first?.color == .purple)
+}

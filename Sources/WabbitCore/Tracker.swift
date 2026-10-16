@@ -13,6 +13,7 @@ public struct Project: Codable, Equatable, Identifiable, FetchableRecord, Mutabl
     public var clientId: Int64
     public var name: String
     public var closedAt: Date? = nil
+    public var color: ProjectColor? = nil
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
 
@@ -81,6 +82,7 @@ public final class Tracker {
         m.registerMigration("v7-watched-apps", migrate: migrateWatchedApps)
         m.registerMigration("v8-title-rules", migrate: migrateTitleRules)
         registerDefaultRateBackfillMigration(&m)
+        registerColorMigration(&m)
         return m
     }
 
@@ -105,7 +107,7 @@ public final class Tracker {
         return try db.write { db in
             var client = Client(name: clientName)
             try client.insert(db)
-            var project = Project(clientId: client.id!, name: projectName)
+            var project = Project(clientId: client.id!, name: projectName, color: try Self.pickColor(db))
             try project.insert(db)
             try Self.applyDefaultRate(db, to: project)
             return (client, project)

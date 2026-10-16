@@ -23,7 +23,12 @@ struct OverviewView: View {
 
     var body: some View {
         Table(rows, children: \.children, selection: $selection) {
-            TableColumn("Name") { r in cell(r, r.name) }
+            TableColumn("Name") { r in
+                HStack(spacing: 6) {
+                    if let p = r.p { ProjectDot(color: p.project.color) }
+                    cell(r, r.name)
+                }
+            }
             TableColumn("Hours") { r in cell(r, hours(r.seconds), trailing: true) }
             TableColumn("Revenue") { r in cell(r, euro(r.revenueCents), trailing: true) }
             TableColumn("Rate") { r in cell(r, r.p?.rateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }

@@ -35,7 +35,9 @@ struct SessionsView: View {
             TableColumn("Duration", value: \.hours) {
                 Text(String(format: "%.2f h", $0.hours)).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
             }
-            TableColumn("Project", value: \.project) { Text($0.project) }
+            TableColumn("Project", value: \.project) { r in
+                HStack(spacing: 6) { ProjectDot(color: model.color(for: r.s.projectId)); Text(r.project) }
+            }
             TableColumn("Manual") { r in
                 if r.s.manual { Image(systemName: "hand.raised").help("Added by hand").accessibilityLabel("Manual") }
             }

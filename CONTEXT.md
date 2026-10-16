@@ -38,7 +38,7 @@ A stretch with no input longer than the Idle Threshold (5 min to 1 h, set by the
 _Avoid_: Away, inactive, pause
 
 **Billing**:
-An optional expectation for a Project: Hourly (just the Rate) or Fixed (an agreed price plus estimated hours). Without Billing, the app shows the tracked data with no warnings.
+An expectation for a Project: Hourly (just the Rate, the default for every new Project) or Fixed (an agreed price plus estimated hours). A Project can be set to no Billing; the app shows the tracked data with no warnings.
 _Avoid_: Budget, contract, plan
 
 **Effective Rate**:

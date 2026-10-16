@@ -131,10 +131,10 @@ extension Tracker {
         }
     }
 
-    /// A new Project inherits the Default Rate, if set.
+    /// A new Project is Hourly and inherits the Default Rate, if set.
     static func applyDefaultRate(_ db: Database, to project: Project) throws {
-        guard let r = try setting(db, "defaultRateCents").flatMap(Int.init) else { return }
-        try db.execute(sql: "UPDATE project SET rateCents = ? WHERE id = ?", arguments: [r, project.id!])
+        let r = try setting(db, "defaultRateCents").flatMap(Int.init)
+        try db.execute(sql: "UPDATE project SET rateCents = ?, billingKind = 'hourly' WHERE id = ?", arguments: [r, project.id!])
     }
 
     static func setting(_ db: Database, _ key: String) throws -> String? {

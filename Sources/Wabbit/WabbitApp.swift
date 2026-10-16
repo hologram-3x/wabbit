@@ -234,6 +234,12 @@ final class TrayModel {
         }
     }
 
+    func color(for projectId: Int64) -> ProjectColor? {
+        allProjects.first { $0.id == projectId }?.color
+    }
+
+    func setColor(_ p: Project, _ c: ProjectColor) { act { try tracker.setColor(projectId: p.id!, c) } }
+
     func shortName(for projectId: Int64) -> String {
         allProjects.first { $0.id == projectId }?.name ?? "?"
     }
@@ -644,6 +650,7 @@ struct ManageView: View {
                     ClientRow(model: model, client: client)
                     ForEach(model.allProjects.filter { $0.clientId == client.id }) { p in
                         HStack {
+                            ProjectColorMenu(color: p.color) { model.setColor(p, $0) }
                             NameField(text: p.name) { model.renameProject(p, $0) }
                                 .opacity(model.closedIds.contains(p.id!) ? 0.5 : 1)
                             Button("Rate & Billing…") { editing = p }
