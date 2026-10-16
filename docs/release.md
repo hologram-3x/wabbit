@@ -1,6 +1,6 @@
 # Release: signed, notarized DMG
 
-The `release` job in `.github/workflows/ci.yml` runs on a `v*` tag push (or by hand via *Run workflow*). It signs `Hours.app` with a Developer ID Application certificate (hardened runtime), packs `build/Hours.dmg`, notarizes it with `notarytool`, staples the ticket, and uploads the DMG as a workflow artifact. On a tag it also signs a Sparkle appcast (`appcast.xml`) with the EdDSA private key and creates a GitHub Release with `Hours.dmg` and `appcast.xml`.
+The `release` job in `.github/workflows/ci.yml` runs on a `v*` tag push (or by hand via *Run workflow*). It signs `Wabbit.app` with a Developer ID Application certificate (hardened runtime), packs `build/Wabbit.dmg`, notarizes it with `notarytool`, staples the ticket, and uploads the DMG as a workflow artifact. On a tag it also signs a Sparkle appcast (`appcast.xml`) with the EdDSA private key and creates a GitHub Release with `Wabbit.dmg` and `appcast.xml`.
 
 ## Repository secrets
 
@@ -35,7 +35,7 @@ Keep the private key in the Keychain (or a password manager) too: losing it mean
 
 ## Where the appcast lives (private repo caveat)
 
-`SUFeedURL` in `App/Info.plist` is `https://github.com/hologram-3x/hours/releases/latest/download/appcast.xml`, and the appcast points each DMG at `https://github.com/hologram-3x/hours/releases/download/<tag>/Hours.dmg`. **While `hologram-3x/hours` is private, those URLs return 404 to anyone not logged in**, and Sparkle sends no GitHub credentials, so update checks fail ("Update Error"). Options:
+`SUFeedURL` in `App/Info.plist` is `https://github.com/hologram-3x/hours/releases/latest/download/appcast.xml`, and the appcast points each DMG at `https://github.com/hologram-3x/hours/releases/download/<tag>/Wabbit.dmg`. **While `hologram-3x/hours` is private, those URLs return 404 to anyone not logged in**, and Sparkle sends no GitHub credentials, so update checks fail ("Update Error"). Options:
 
 1. **Public releases-only repo** (recommended): e.g. `hologram-3x/hours-releases`, empty except for Releases. In `ci.yml` add `--repo hologram-3x/hours-releases` to `gh release create`, use a fine-grained PAT with *Contents: write* on that repo as `GH_TOKEN` (secret `RELEASES_TOKEN`), and change the repo name in `--download-url-prefix` and in `SUFeedURL`.
 2. **Hosted appcast**: publish `appcast.xml` and the DMG on any static HTTPS host (GitHub Pages of a public repo, S3/R2, the company site) and point `SUFeedURL` and `--download-url-prefix` there.
@@ -56,21 +56,21 @@ The tag (without `v`) becomes `CFBundleShortVersionString`; the workflow run num
 1. Do the Sparkle keys step above and pick where the appcast lives (edit `SUFeedURL` and `ci.yml` if not this repo).
 2. Push this branch's `.github/workflows/ci.yml` change yourself (agents can't push workflow files).
 3. `git tag v1.0.0 && git push origin v1.0.0`, wait for the `release` job: it notarizes, writes `appcast.xml` and creates the `v1.0.0` Release.
-4. On a clean Mac (or a new user account): download `Hours.dmg` from the Release, drag Hours to Applications, open it. Gatekeeper must not complain; the clock appears in the menu bar; Launch at login is on.
+4. On a clean Mac (or a new user account): download `Wabbit.dmg` from the Release, drag Wabbit to Applications, open it. Gatekeeper must not complain; the clock appears in the menu bar; Launch at login is on.
 5. Updates: tag `v1.0.1` the same way, then in the installed v1.0.0 choose **Check for Updates…**. Sparkle must offer 1.0.1, install it and relaunch.
 
 ## Footprint over a full workday (needs a human)
 
 The budget (PLAN.md) is < 30 MB memory and ~0% CPU at rest. Measure the installed release build, not `swift run`:
 
-1. Open Instruments → **Activity Monitor** template (or **Allocations** + **Energy Log**), target the running Hours, record for a workday while using the Mac normally: a call or two (Meeting Prompt), some Watched App prompts, open each window once and close it.
+1. Open Instruments → **Activity Monitor** template (or **Allocations** + **Energy Log**), target the running Wabbit, record for a workday while using the Mac normally: a call or two (Meeting Prompt), some Watched App prompts, open each window once and close it.
 2. Pass if *Memory* (physical footprint, the number Activity Monitor shows; not RSS) settles under 30 MB after the windows are closed and *% CPU* is ~0 outside the moments you interact.
-3. Quick command-line check at any time: `footprint $(pgrep -x Hours) | head -3` and `top -l 3 -s 30 -pid $(pgrep -x Hours) -stats pid,cpu,idlew,mem,time`.
+3. Quick command-line check at any time: `footprint $(pgrep -x Wabbit) | head -3` and `top -l 3 -s 30 -pid $(pgrep -x Wabbit) -stats pid,cpu,idlew,mem,time`.
 
 ## Locally
 
 ```sh
 SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" scripts/build-app.sh dmg
-xcrun notarytool submit build/Hours.dmg --wait --apple-id … --team-id … --password …
-xcrun stapler staple build/Hours.dmg
+xcrun notarytool submit build/Wabbit.dmg --wait --apple-id … --team-id … --password …
+xcrun stapler staple build/Wabbit.dmg
 ```

@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Hours</string>
+	<string>Wabbit</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hours</string>
+	<string>Wabbit</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.opencom-italy.hours</string>
+	<string>org.opencom-italy.wabbit</string>
 	<key>CFBundleExecutable</key>
-	<string>Hours</string>
+	<string>Wabbit</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -25,12 +25,12 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Hours reads your calendar event when a call starts, to suggest the right Project. It works without it.</string>
+	<string>Wabbit reads your calendar event when a call starts, to suggest the right Project. It works without it.</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/hologram-3x/hours/releases/latest/download/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Hours</string>
+	<string>Wabbit</string>
 </dict>
 </plist>

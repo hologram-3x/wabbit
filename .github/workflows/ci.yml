@@ -52,23 +52,23 @@ jobs:
 
       - name: Notarize and staple
         run: |
-          xcrun notarytool submit build/Hours.dmg --wait \
+          xcrun notarytool submit build/Wabbit.dmg --wait \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
-          xcrun stapler staple build/Hours.dmg
-          spctl --assess --type open --context context:primary-signature -v build/Hours.dmg
+          xcrun stapler staple build/Wabbit.dmg
+          spctl --assess --type open --context context:primary-signature -v build/Wabbit.dmg
 
       - name: Sparkle appcast and GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p build/release && cp build/Hours.dmg build/release/
+          mkdir -p build/release && cp build/Wabbit.dmg build/release/
           echo "$SPARKLE_ED_PRIVATE_KEY" | .build/artifacts/sparkle/Sparkle/bin/generate_appcast --ed-key-file - \
             --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/" build/release
-          gh release create "$GITHUB_REF_NAME" build/release/Hours.dmg build/release/appcast.xml \
-            --title "Hours ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release create "$GITHUB_REF_NAME" build/release/Wabbit.dmg build/release/appcast.xml \
+            --title "Wabbit ${GITHUB_REF_NAME#v}" --generate-notes
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Hours-dmg
-          path: build/Hours.dmg
+          name: Wabbit-dmg
+          path: build/Wabbit.dmg

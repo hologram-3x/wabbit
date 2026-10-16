@@ -1,6 +1,6 @@
 # One SwiftPM package, app bundled by a script
 
-Hours is a single Swift package: the `HoursCore` library (domain + GRDB storage, no Apple-only imports), the `Hours` executable (SwiftUI `MenuBarExtra` shell) and `HoursCoreTests`. `scripts/build-app.sh` wraps the executable into `Hours.app` with `App/Info.plist` (`LSUIElement` = no Dock icon), signs it and optionally packs a DMG. There is no `.xcodeproj`: everything builds with `swift build` / `swift test`, locally and in CI, and the package still opens in Xcode.
+Wabbit is a single Swift package: the `WabbitCore` library (domain + GRDB storage, no Apple-only imports), the `Wabbit` executable (SwiftUI `MenuBarExtra` shell) and `WabbitCoreTests`. `scripts/build-app.sh` wraps the executable into `Wabbit.app` with `App/Info.plist` (`LSUIElement` = no Dock icon), signs it and optionally packs a DMG. There is no `.xcodeproj`: everything builds with `swift build` / `swift test`, locally and in CI, and the package still opens in Xcode.
 
 ## Considered Options
 
@@ -13,4 +13,4 @@ Hours is a single Swift package: the `HoursCore` library (domain + GRDB storage,
 - The core opens storage from a file path (`nil` = in-memory), so the app never imports GRDB.
 - Time comes from an injected `WallClock`; detection reaches the core through a `DetectionFeed` emitting `DetectionEvent`s. Tests use a fake clock, a fake feed and real in-memory SQLite.
 - Launch at login (`SMAppService.mainApp`) is registered automatically only the first time the app runs from `/Applications`, so dev builds never add themselves as login items; a tray toggle turns it on or off.
-- Bundle identifier: `org.opencom-italy.hours`.
+- Bundle identifier: `org.opencom-italy.wabbit`.

@@ -1,4 +1,4 @@
-# Hours (working name)
+# Wabbit
 
 See [PLAN.md](./PLAN.md) for the v1 plan and [CONTEXT.md](./CONTEXT.md) for the domain vocabulary.
 

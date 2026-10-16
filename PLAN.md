@@ -1,10 +1,10 @@
-# Hours v1 plan
+# Wabbit v1 plan
 
 Vocabulary follows [CONTEXT.md](./CONTEXT.md). Architecture decisions live in [docs/adr](./docs/adr/).
 
 ## Goal
 
-A freelancer leaves Hours in the menu bar all week. Calls and work in Watched Apps prompt them to track time, they barely touch it otherwise, and at the end of the month they can see per Client whether they're underbilling. Then they export a CSV for the invoice.
+A freelancer leaves Wabbit in the menu bar all week. Calls and work in Watched Apps prompt them to track time, they barely touch it otherwise, and at the end of the month they can see per Client whether they're underbilling. Then they export a CSV for the invoice.
 
 ## Scope
 
@@ -28,7 +28,7 @@ A freelancer leaves Hours in the menu bar all week. Calls and work in Watched Ap
 
 ## Footprint budget
 
-Hours is always running, so these are acceptance criteria, measured in M8:
+Wabbit is always running, so these are acceptance criteria, measured in M8:
 - **< 30 MB RAM** at rest, **~0% CPU** at rest
 - Use OS event listeners instead of polling wherever they exist (microphone and camera state, active app changes)
 - Only idle detection polls, at most once every 30 s
@@ -39,7 +39,7 @@ Hours is always running, so these are acceptance criteria, measured in M8:
 - **Swift and SwiftUI**, minimum macOS 14:
   - `MenuBarExtra` for the tray
   - AppKit where SwiftUI falls short
-- **`HoursCore`**: a Swift package with no Apple-only imports, so the Windows and Linux ports can reuse it. It holds:
+- **`WabbitCore`**: a Swift package with no Apple-only imports, so the Windows and Linux ports can reuse it. It holds:
   - the domain: Clients, Projects, Sessions, Billing
   - rounding, Tax Rate and Effective Rate
   - window-title rules
@@ -60,7 +60,7 @@ Hours is always running, so these are acceptance criteria, measured in M8:
 Each milestone ends with something you can demo.
 
 ### M0 · Skeleton
-- An Xcode project with a menu-bar-only app (no Dock icon) and the `HoursCore` package
+- An Xcode project with a menu-bar-only app (no Dock icon) and the `WabbitCore` package
 - GRDB schema with migrations
 - Launch at login
 - CI builds and notarizes a DMG
@@ -89,7 +89,7 @@ Each milestone ends with something you can demo.
   - **Hourly:** Rate only
   - **Fixed:** agreed price + estimated hours → Effective Rate and % of estimate used
 - **Overview per Client and Project:** hours, revenue (net and gross), Effective Rate compared with the Rate, and % of estimate. Shown in red only when Billing exists and the Project is over its estimate or under its Rate. Without Billing, the data is shown with no warnings.
-- Core logic gets unit tests (`HoursCore` tests): money in integer cents, tax in both directions, Effective Rate.
+- Core logic gets unit tests (`WabbitCore` tests): money in integer cents, tax in both directions, Effective Rate.
 - **Done when:** a Fixed Project at €2,000 with 80 h tracked shows €25/h against a €50/h Rate.
 
 ### M4 · Export
@@ -132,4 +132,3 @@ Each milestone ends with something you can demo.
 ## Open questions
 
 - **Do Client email domains** for the meeting match live on the Client? Assumed yes.
-- **Name.** "Hours" is still a working name.

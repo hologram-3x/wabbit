@@ -1,8 +1,8 @@
 #!/bin/sh
-# Builds build/Hours.app from the SwiftPM "Hours" product, signs it, and optionally packs a DMG.
+# Builds build/Wabbit.app from the SwiftPM "Wabbit" product, signs it, and optionally packs a DMG.
 #   scripts/build-app.sh            ad-hoc signed app (local runs)
 #   SIGN_IDENTITY="Developer ID Application: …" scripts/build-app.sh dmg
-#                                    Developer ID signed app + build/Hours.dmg (CI release)
+#                                    Developer ID signed app + build/Wabbit.dmg (CI release)
 # VERSION / BUILD_NUMBER override the Info.plist versions.
 # SPARKLE_PUBLIC_ED_KEY (from `generate_keys`, see docs/release.md) turns on in-app updates;
 # without it the app is built with Sparkle embedded but never checks.
@@ -10,16 +10,16 @@ set -eu
 cd "$(dirname "$0")/.."
 
 # ponytail: host arch only (arm64 on CI); add `--arch arm64 --arch x86_64` if Intel Macs matter.
-swift build -c release --product Hours
+swift build -c release --product Wabbit
 BIN=$(swift build -c release --show-bin-path)
 
-APP=build/Hours.app
+APP=build/Wabbit.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-cp "$BIN/Hours" "$APP/Contents/MacOS/Hours"
+cp "$BIN/Wabbit" "$APP/Contents/MacOS/Wabbit"
 # SwiftPM links Sparkle with @rpath but only adds @loader_path (Contents/MacOS) as an rpath.
-install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Hours"
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Wabbit"
 ditto "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
-# Hours isn't sandboxed, so Sparkle's XPC services are unused (sparkle-project.org/documentation/sandboxing).
+# Wabbit isn't sandboxed, so Sparkle's XPC services are unused (sparkle-project.org/documentation/sandboxing).
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
 cp App/Info.plist "$APP/Contents/Info.plist"
 for b in "$BIN"/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/"; done
@@ -39,7 +39,7 @@ codesign --verify --strict "$APP"
 if [ "${1:-}" = dmg ]; then
   STAGE=build/dmg && mkdir -p "$STAGE"
   cp -R "$APP" "$STAGE/" && ln -s /Applications "$STAGE/Applications"
-  hdiutil create -volname Hours -srcfolder "$STAGE" -ov -format UDZO build/Hours.dmg
-  [ -n "${SIGN_IDENTITY:-}" ] && codesign --sign "$SIGN_IDENTITY" --timestamp build/Hours.dmg
+  hdiutil create -volname Wabbit -srcfolder "$STAGE" -ov -format UDZO build/Wabbit.dmg
+  [ -n "${SIGN_IDENTITY:-}" ] && codesign --sign "$SIGN_IDENTITY" --timestamp build/Wabbit.dmg
 fi
 echo "Built $APP"

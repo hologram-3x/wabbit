@@ -1,6 +1,6 @@
-# Hours is native Swift, not Tauri
+# Wabbit is native Swift, not Tauri
 
-Unlike Chronicles, Octo, Zuzu and Vidego, which are opened, used and closed, Hours sits in the menu bar all day, so its resting footprint matters more than sharing the house stack. Hours is therefore written in Swift. The macOS app uses SwiftUI and AppKit, plus Apple's calendar, audio and idle-time APIs (EventKit, Core Audio, IOKit). All logic that doesn't depend on the OS lives in a separate Swift package: Clients, Projects, Sessions, rounding, Tax Rate, Effective Rate, SQLite storage and window-title rules.
+Unlike Chronicles, Octo, Zuzu and Vidego, which are opened, used and closed, Wabbit sits in the menu bar all day, so its resting footprint matters more than sharing the house stack. Wabbit is therefore written in Swift. The macOS app uses SwiftUI and AppKit, plus Apple's calendar, audio and idle-time APIs (EventKit, Core Audio, IOKit). All logic that doesn't depend on the OS lives in a separate Swift package: Clients, Projects, Sessions, rounding, Tax Rate, Effective Rate, SQLite storage and window-title rules.
 
 ## Considered Options
 
@@ -10,4 +10,4 @@ Unlike Chronicles, Octo, Zuzu and Vidego, which are opened, used and closed, Hou
 ## Consequences
 
 - Windows and Linux are ports, not builds. Each reuses the shared Swift package and gets its own native UI and detection code (e.g. Swift on Windows with WinUI bindings, Swift on Linux with GTK/Adwaita bindings), or a different shell if those prove immature at the time.
-- No code is shared with the Tauri apps. That's accepted, because they share no features with Hours.
+- No code is shared with the Tauri apps. That's accepted, because they share no features with Wabbit.

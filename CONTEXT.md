@@ -1,4 +1,4 @@
-# Hours (working name)
+# Wabbit
 
 A native, always-on desktop menu-bar app with a small footprint (macOS first; Windows and Linux later as ports) for freelancers to track time worked per Project. Data stays on one machine, with a backup file. Its main purpose is to show whether a Client is underbilled or taking far more time than expected, not just to produce invoices. It can prompt you to start tracking when a meeting begins or a Watched App is in use.
 
