@@ -23,12 +23,18 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     func refreshStatus() async {
         guard let center else { return }
-        status = await center.notificationSettings().authorizationStatus
+        // Callback forms here and below: Swift 6.0/6.1 (CI) rejects sending these non-Sendable types across actors.
+        status = await withCheckedContinuation { c in center.getNotificationSettings { c.resume(returning: $0.authorizationStatus) } }
     }
 
     func requestAuthorization() async {
         _ = try? await center?.requestAuthorization(options: [.alert, .sound])
         await refreshStatus()
+    }
+
+    /// Synchronous on purpose: the async `add` sends the request across actors, which Swift 6.0/6.1 rejects.
+    private static func enqueue(_ request: UNNotificationRequest, on center: UNUserNotificationCenter) {
+        center.add(request)
     }
 
     /// Posts (or replaces) the notification for `prompt`; actions are (identifier, title) pairs.
@@ -49,7 +55,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             await requestAuthorization()  // prompts only the first time; afterwards returns the stored answer
             guard status == .authorized || status == .provisional, current[id] === content else { return }
             center.removeDeliveredNotifications(withIdentifiers: [id])
-            try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+            Self.enqueue(UNNotificationRequest(identifier: id, content: content, trigger: nil), on: center)
         }
     }
 
