@@ -33,15 +33,9 @@ gh variable set SPARKLE_PUBLIC_ED_KEY --body "<public key printed above>"
 
 Keep the private key in the Keychain (or a password manager) too: losing it means existing installs can't verify updates anymore. Changing it later needs one release signed with the old key that ships the new public key.
 
-## Where the appcast lives (private repo caveat)
+## Where the appcast lives
 
-`SUFeedURL` in `App/Info.plist` is `https://github.com/hologram-3x/wabbit/releases/latest/download/appcast.xml`, and the appcast points each DMG at `https://github.com/hologram-3x/wabbit/releases/download/<tag>/Wabbit.dmg`. **While `hologram-3x/wabbit` is private, those URLs return 404 to anyone not logged in**, and Sparkle sends no GitHub credentials, so update checks fail ("Update Error"). Options:
-
-1. **Public releases-only repo** (recommended): e.g. `hologram-3x/wabbit-releases`, empty except for Releases. In `ci.yml` add `--repo hologram-3x/wabbit-releases` to `gh release create`, use a fine-grained PAT with *Contents: write* on that repo as `GH_TOKEN` (secret `RELEASES_TOKEN`), and change the repo name in `--download-url-prefix` and in `SUFeedURL`.
-2. **Hosted appcast**: publish `appcast.xml` and the DMG on any static HTTPS host (GitHub Pages of a public repo, S3/R2, the company site) and point `SUFeedURL` and `--download-url-prefix` there.
-3. **Make `hologram-3x/wabbit` public**: everything works as configured.
-
-Whatever the choice, `SUFeedURL` is baked into every shipped build, so pick it before v1.0: moving it later means one last release on the old feed that ships the new URL.
+`SUFeedURL` in `App/Info.plist` is `https://github.com/hologram-3x/wabbit/releases/latest/download/appcast.xml`, and the appcast points each DMG at `https://github.com/hologram-3x/wabbit/releases/download/<tag>/Wabbit.dmg`. The repo is public, so Sparkle can fetch both without credentials. `SUFeedURL` is baked into every shipped build: moving it later needs one last release on the old feed that ships the new URL.
 
 ## Cutting a release
 
@@ -53,11 +47,10 @@ The tag (without `v`) becomes `CFBundleShortVersionString`; the workflow run num
 
 ## v1.0 (needs a human)
 
-1. Do the Sparkle keys step above and pick where the appcast lives (edit `SUFeedURL` and `ci.yml` if not this repo).
-2. Push this branch's `.github/workflows/ci.yml` change yourself (agents can't push workflow files).
-3. `git tag v1.0.0 && git push origin v1.0.0`, wait for the `release` job: it notarizes, writes `appcast.xml` and creates the `v1.0.0` Release.
-4. On a clean Mac (or a new user account): download `Wabbit.dmg` from the Release, drag Wabbit to Applications, open it. Gatekeeper must not complain; the clock appears in the menu bar; Launch at login is on.
-5. Updates: tag `v1.0.1` the same way, then in the installed v1.0.0 choose **Check for Updates…**. Sparkle must offer 1.0.1, install it and relaunch.
+1. Get a paid Apple Developer account, export the Developer ID Application certificate and add the secrets above; do the Sparkle keys step.
+2. `git tag v1.0.0 && git push origin v1.0.0`, wait for the `release` job: it notarizes, writes `appcast.xml` and creates the `v1.0.0` Release.
+3. On a clean Mac (or a new user account): download `Wabbit.dmg` from the Release, drag Wabbit to Applications, open it. Gatekeeper must not complain; the rabbit appears in the menu bar; Launch at login is on.
+4. Updates: tag `v1.0.1` the same way, then in the installed v1.0.0 choose **Check for Updates…**. Sparkle must offer 1.0.1, install it and relaunch.
 
 ## Footprint over a full workday (needs a human)
 
