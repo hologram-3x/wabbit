@@ -91,3 +91,16 @@ struct Harness {
     h.feed.emit(.userIdle(since: h.clock.now()))
     #expect(try h.tracker.runningSession() == running)
 }
+
+@Test func sessionsUnderAMinuteAreNotSaved() throws {
+    let h = try Harness()
+    let (_, p) = try h.tracker.createClient(name: "Acme", firstProject: "Site")
+    _ = try h.tracker.start(projectId: p.id!)
+    h.clock.advance(by: 59)
+    try h.tracker.stop()
+    #expect(try h.tracker.sessions(projectId: p.id!).isEmpty)
+    _ = try h.tracker.start(projectId: p.id!)
+    h.clock.advance(by: 60)
+    try h.tracker.stop()
+    #expect(try h.tracker.sessions(projectId: p.id!).count == 1)
+}

@@ -187,8 +187,7 @@ extension Tracker {
         guard var session = try Session.fetchOne(db, key: id) else {
             throw WabbitError.noPendingIdle
         }
-        session.end = end
-        try session.update(db)
+        try finish(db, &session, at: end)
         return session
     }
 }

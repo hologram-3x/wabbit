@@ -13,7 +13,7 @@ A body of work for one Client, with its own Rate. It is either Open (time can be
 _Avoid_: Job, task, engagement
 
 **Session**:
-One continuous stretch of tracked time on one Project, with a start and an end. Only one Session runs at a time; a new prompt offers to switch. (Two at once, e.g. a meeting plus other work, may come later.) Sessions can be added, edited or deleted by hand, and hand-added ones are marked as Manual.
+One continuous stretch of tracked time on one Project, with a start and an end. Only one Session runs at a time; a new prompt offers to switch. (Two at once, e.g. a meeting plus other work, may come later.) Sessions can be added, edited or deleted by hand, and hand-added ones are marked as Manual. A tracked Session that lasts under a minute is not kept.
 _Avoid_: Entry, log, timer, timesheet row
 
 **Rate**:

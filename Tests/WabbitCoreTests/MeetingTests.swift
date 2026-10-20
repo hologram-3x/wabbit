@@ -85,6 +85,7 @@ private func twoProjects(_ h: Harness) throws -> (website: Int64, app: Int64) {
     let h = try Harness()
     let p = try twoProjects(h)
     let running = try h.tracker.start(projectId: p.app)
+    h.clock.advance(by: 120)  // long enough to be kept (Sessions under a minute are dropped)
     h.feed.emit(.camera(on: true))
     h.clock.advance(by: 10)
     guard case .switchTo(let suggested, _) = h.tracker.pendingMeetingPrompt() else {

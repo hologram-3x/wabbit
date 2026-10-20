@@ -140,6 +140,7 @@ extension Tracker {
     }
 
     private static func stopRunning(_ db: Database, ifProject id: Int64, at now: Date) throws {
-        try db.execute(sql: "UPDATE session SET \"end\" = ? WHERE \"end\" IS NULL AND projectId = ?", arguments: [now, id])
+        guard var running = try Session.filter(Column("end") == nil && Column("projectId") == id).fetchOne(db) else { return }
+        try finish(db, &running, at: now)
     }
 }

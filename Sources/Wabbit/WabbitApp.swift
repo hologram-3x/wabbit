@@ -463,6 +463,25 @@ private struct FooterButtonStyle: ButtonStyle {
     }
 }
 
+/// Keeps the MenuBarExtra panel as tall as its content: macOS grows the panel when content grows
+/// but never shrinks it, leaving an empty band (e.g. after an Idle prompt is resolved). Top edge stays put.
+private struct PanelFitter: NSViewRepresentable {
+    let height: CGFloat
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) {
+        let height = height
+        DispatchQueue.main.async {
+            guard let window = view.window, height > 0 else { return }
+            var frame = window.frame
+            let target = window.frameRect(forContentRect: NSRect(origin: .zero, size: NSSize(width: frame.width, height: height))).height
+            guard abs(target - frame.height) > 0.5 else { return }
+            frame.origin.y += frame.height - target
+            frame.size.height = target
+            window.setFrame(frame, display: true)
+        }
+    }
+}
+
 /// A full-width row with a hover highlight.
 private struct TrayRow<Content: View>: View {
     @ViewBuilder let content: Content
@@ -502,6 +521,7 @@ struct TrayView: View {
         }
         .frame(width: 320)
         .background(Color.trayBody.ignoresSafeArea())
+        .background { GeometryReader { PanelFitter(height: $0.size.height) } }
     }
 
     private var header: some View {
@@ -627,13 +647,21 @@ struct TrayView: View {
             Text("Assign to a Project or drop it.")
                 .foregroundStyle(.secondary)
                 .font(.caption)
-            ForEach(model.projects) { project in
-                Button("Assign to \(model.label(for: project.id!))") {
-                    model.assignSplitIdle(to: project)
+            HStack {
+                Menu("Assign to") {
+                    // Open Projects only (`model.projects`), grouped by Client.
+                    ForEach(Dictionary(grouping: model.projects, by: \.clientId).sorted { (model.clients[$0.key] ?? "") < (model.clients[$1.key] ?? "") }, id: \.key) { clientId, projects in
+                        Section(model.clients[clientId] ?? "?") {
+                            ForEach(projects) { project in
+                                Button(project.name) { model.assignSplitIdle(to: project) }
+                                    .disabled(project.id == session.projectId)
+                            }
+                        }
+                    }
                 }
-                .disabled(project.id == session.projectId)
+                .fixedSize()
+                Button("Drop", role: .destructive) { model.dropSplitIdle() }
             }
-            Button("Drop", role: .destructive) { model.dropSplitIdle() }
         }
         .trayCard()
     }

@@ -137,9 +137,17 @@ public final class Tracker {
     @discardableResult
     private static func stopRunning(_ db: Database, at now: Date) throws -> Session? {
         guard var running = try Session.filter(Column("end") == nil).fetchOne(db) else { return nil }
-        running.end = now
-        try running.update(db)
+        try finish(db, &running, at: now)
         return running
+    }
+
+    /// Sessions shorter than this are not kept: a Session ending sooner is deleted instead of saved.
+    public static let minimumSession: TimeInterval = 60
+
+    /// Ends `session` at `end`, or deletes it when it lasted under `minimumSession`. Every tracked Session ends here.
+    static func finish(_ db: Database, _ session: inout Session, at end: Date) throws {
+        session.end = end
+        if end.timeIntervalSince(session.start) < minimumSession { _ = try session.delete(db) } else { try session.update(db) }
     }
 
     // MARK: Queries
