@@ -30,9 +30,9 @@ struct OverviewView: View {
                 }
             }
             TableColumn("Hours") { r in cell(r, hours(r.seconds), trailing: true) }
-            TableColumn("Revenue") { r in cell(r, euro(r.revenueCents), trailing: true) }
-            TableColumn(model.amountMode == .net ? "Net Rate" : "Gross Rate") { r in cell(r, r.p?.rateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
-            TableColumn("Effective Rate") { r in cell(r, r.p?.effectiveRateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
+            TableColumn("\(modeLabel) Revenue") { r in cell(r, euro(r.revenueCents), trailing: true) }
+            TableColumn("\(modeLabel) Rate") { r in cell(r, r.p?.rateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
+            TableColumn("\(modeLabel) Effective Rate") { r in cell(r, r.p?.effectiveRateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
             TableColumn("% of Estimate") { r in cell(r, r.p?.percentOfEstimate.map { "\(Int($0.rounded()))%" } ?? "", trailing: true) }
             TableColumn("Warnings") { r in
                 HStack {
@@ -81,6 +81,9 @@ struct OverviewView: View {
     private func hours(_ s: Double) -> String { String(format: "%.1f h", s / 3600) }
 
     /// Raw cents -> text under the Net/Gross Switch (applied to every amount shown).
+    /// Amount columns follow the Net/Gross Switch, so their titles say which one they show.
+    private var modeLabel: String { model.amountMode == .net ? "Net" : "Gross" }
+
     private func euro(_ cents: Int, perHour: Bool = false) -> String {
         let v = Money.display(cents, mode: model.amountMode, taxBps: model.taxBps)
         return String(format: "%.2f €", Double(v) / 100) + (perHour ? "/h" : "")
