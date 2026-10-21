@@ -52,17 +52,29 @@ struct InstalledApp: Hashable {
     /// Apps in the usual application folders (one level deep), by bundle identifier.
     static func scan() -> [InstalledApp] {
         let fm = FileManager.default
-        let dirs = ["/Applications", "/System/Applications", "/Applications/Utilities",
+        let dirs = ["/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities",
                     NSHomeDirectory() + "/Applications"]
         var found: [String: InstalledApp] = [:]
         for dir in dirs {
             for file in (try? fm.contentsOfDirectory(atPath: dir)) ?? [] where file.hasSuffix(".app") {
-                let url = URL(fileURLWithPath: dir).appending(path: file)
-                guard let id = Bundle(url: url)?.bundleIdentifier else { continue }
-                found[id] = InstalledApp(bundleID: id, name: file.replacingOccurrences(of: ".app", with: ""))
+                if let app = at(URL(fileURLWithPath: dir).appending(path: file)) { found[app.bundleID] = app }
             }
         }
         return found.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    static func at(_ url: URL) -> InstalledApp? {
+        guard let id = Bundle(url: url)?.bundleIdentifier else { return nil }
+        return InstalledApp(bundleID: id, name: url.deletingPathExtension().lastPathComponent)
+    }
+
+    /// Any app, anywhere (e.g. apps kept on an external drive): an open panel limited to applications.
+    @MainActor static func choose() -> InstalledApp? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Watch"
+        return panel.runModal() == .OK ? panel.url.flatMap(at) : nil
     }
 }
 
@@ -102,6 +114,10 @@ struct WatchedAppsView: View {
                     ForEach(installed.filter { app in !model.watchedApps.contains { $0.bundleID == app.bundleID } },
                             id: \.bundleID) { app in
                         Button(app.name) { model.setWatchedApp(app.bundleID, app.name, nil) }
+                    }
+                    Divider()
+                    Button("Choose App…") {
+                        if let app = InstalledApp.choose() { model.setWatchedApp(app.bundleID, app.name, nil) }
                     }
                 }
             }
