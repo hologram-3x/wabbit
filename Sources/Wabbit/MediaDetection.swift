@@ -155,6 +155,11 @@ extension TrayModel {
     func showMeetingPanel() {
         guard meetingPrompt != nil else { return }
         if let meetingPanel { meetingPanel.orderFrontRegardless(); return }
+        meetingPanel = floatingPanel(MeetingPromptView(model: self))
+    }
+
+    /// Small non-activating panel floating over other apps, top right, shown in front.
+    func floatingPanel<V: View>(_ view: V) -> NSPanel {
         let panel = NSPanel(contentRect: .zero, styleMask: [.titled, .nonactivatingPanel, .utilityWindow],
                             backing: .buffered, defer: true)
         panel.title = "Wabbit"
@@ -162,13 +167,13 @@ extension TrayModel {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentView = NSHostingView(rootView: MeetingPromptView(model: self).padding().frame(width: 300))
+        panel.contentView = NSHostingView(rootView: view.padding().frame(width: 300))
         panel.setContentSize(panel.contentView!.fittingSize)
         if let screen = NSScreen.main?.visibleFrame {
             panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 16, y: screen.maxY - 16))
         }
         panel.orderFrontRegardless()
-        meetingPanel = panel
+        return panel
     }
 }
 

@@ -114,8 +114,8 @@ extension TrayModel {
         guard let prompt = watchedPrompt, notifies(.watched) else { return notifier.remove(.watched) }
         let start = prompt.projectId.map { [("accept", (running == nil ? "Start " : "Switch to ") + label(for: $0))] } ?? []
         notifier.post(.watched, title: "Track time for \(prompt.appName)?",
-                      body: prompt.projectId == nil ? "Pick a Project in the tray to start." : "",
-                      actions: start + [("notNow", "Not now"), ("notToday", "Not today")])
+                      body: "",
+                      actions: start + [("other", "Choose Project…"), ("notNow", "Not now"), ("notToday", "Not today")])
     }
 
     /// Acts on the prompt as it is now: a stale notification for a cleared prompt does nothing.
@@ -132,6 +132,7 @@ extension TrayModel {
         case (.idle, "keep") where idlePrompt != nil: resolveIdle(.keep)
         case (.idle, "discard") where idlePrompt != nil: resolveIdle(.discard)
         case (.idle, "split") where idlePrompt != nil: resolveIdle(.split)
+        case (.watched, "other"), (.watched, UNNotificationDefaultActionIdentifier): showWatchedPanel()
         case (.watched, "accept"): if let p = watchedPrompt?.projectId { acceptWatchedPrompt(projectId: p) }
         case (.watched, "notNow") where watchedPrompt != nil: snoozeWatched(today: false)
         case (.watched, "notToday") where watchedPrompt != nil: snoozeWatched(today: true)

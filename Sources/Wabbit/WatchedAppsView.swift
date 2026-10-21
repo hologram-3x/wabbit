@@ -209,28 +209,40 @@ struct TitleRulesEditor: View {
     }
 }
 
-/// Tray section for a due Watched App prompt.
+/// A due Watched App prompt: Project picker + Start, in the tray and in the floating panel.
 struct WatchedAppPromptSection: View {
     let model: TrayModel
     let prompt: WatchedAppPrompt
+    @State private var picked: Int64?
 
     var body: some View {
+        let chosen = picked ?? prompt.projectId ?? model.projects.first?.id
         VStack(alignment: .leading, spacing: 6) {
             Text("Track time for \(prompt.appName)?").font(.headline)
-            if let id = prompt.projectId {
-                Button((model.running == nil ? "Start " : "Switch to ") + model.label(for: id)) {
-                    model.acceptWatchedPrompt(projectId: id)
-                }
-                .keyboardShortcut(.defaultAction)
-            } else {
-                Text("Pick a Project below to start.").font(.caption).foregroundStyle(.secondary)
+            Picker("Project", selection: Binding(get: { chosen }, set: { picked = $0 })) {
+                ForEach(model.projects) { Text(model.label(for: $0.id!)).tag(Optional($0.id!)) }
             }
             HStack {
                 Button("Not now") { model.snoozeWatched(today: false) }
                 Button("Not today") { model.snoozeWatched(today: true) }
+                Button(model.running == nil ? "Start" : "Switch to") {
+                    if let chosen { model.acceptWatchedPrompt(projectId: chosen) }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(chosen == nil)
             }
         }
         .trayCard()
+    }
+}
+
+extension TrayModel {
+    /// The picker panel for a Watched App prompt ("Choose Project…" or a click on the notification);
+    /// closed by the didSet of watchedPrompt when the prompt changes or goes away.
+    func showWatchedPanel() {
+        guard let prompt = watchedPrompt else { return }
+        if let watchedPanel { watchedPanel.orderFrontRegardless(); return }
+        watchedPanel = floatingPanel(WatchedAppPromptSection(model: self, prompt: prompt).padding().frame(width: 300))
     }
 }
 

@@ -163,7 +163,7 @@ final class TrayModel {
     private(set) var folders: [Int64: [ProjectFolder]] = [:]
     private(set) var idleThresholdMinutes: Int = 15
     private(set) var idlePrompt: IdlePrompt? { didSet { if idlePrompt != oldValue { notifyIdle() } } }
-    private(set) var watchedPrompt: WatchedAppPrompt? { didSet { if watchedPrompt != oldValue { notifyWatched() } } }
+    private(set) var watchedPrompt: WatchedAppPrompt? { didSet { if watchedPrompt != oldValue { notifyWatched(); watchedPanel?.close(); watchedPanel = nil } } }
     /// Prompts that also post a macOS notification (Notifications.swift).
     private(set) var notifyOn: Set<NotifiedPrompt> = []
     let notifier = Notifier()
@@ -186,6 +186,7 @@ final class TrayModel {
     /// Meeting Prompt (ticket 08): see MediaDetection.swift.
     var meetingPrompt: MeetingPrompt? { didSet { if meetingPrompt != oldValue { notifyMeeting() } } }
     var meetingPanel: NSPanel?
+    var watchedPanel: NSPanel?
     let calendar = CalendarAccess()
     private var media: MediaDetection?
     /// Sparkle (ticket 13). Started only when the build embedded an EdDSA public key
