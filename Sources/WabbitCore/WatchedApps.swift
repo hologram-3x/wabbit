@@ -30,6 +30,8 @@ final class WatchedAppRuntime {
     var title: String?
     /// Focused window's document path, normalised and lowercased; nil when none or unknown.
     var document: String?
+    /// Newest folder signal (normalised, lowercased) and when it came; see FolderSignals.swift.
+    var signal: (path: String, at: Date)?
     var since = Date.distantPast
     /// "Not now": until the app leaves the front.
     var notNow = false
@@ -104,8 +106,10 @@ extension Tracker {
               (w.notToday[id] ?? .distantPast) <= now,
               let app = try? db.read({ try WatchedApp.fetchOne($0, key: id) })
         else { return nil }
-        // Document folder first, then title rules, then the default; a Closed Project is no suggestion.
-        let matched = w.document.flatMap(projectForNormalised) ?? resolveProject(for: app, title: w.title)
+        // Fresh folder signal (terminals only), then document folder, then title rules, then the default;
+        // a Closed Project is no suggestion.
+        let matched = freshFolderSignal(frontApp: id).flatMap(projectForNormalised)
+            ?? w.document.flatMap(projectForNormalised) ?? resolveProject(for: app, title: w.title)
         let runningId = (try? runningSession())?.projectId
         if let matched {
             guard runningId != matched else { return nil }

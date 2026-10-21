@@ -6,6 +6,7 @@ import SwiftUI
 /// Notification-driven: no polling. Window titles and documents are read for Watched Apps only (other apps are never
 /// observed beyond their bundle ID) and need Accessibility; without it they are nil. Wabbit itself is ignored so opening its
 /// own windows doesn't count as leaving the Watched App.
+/// With folder signals on, a Watched terminal in front also asks herdr for its focused pane's folder, on the same events.
 @MainActor
 final class ActiveAppObserver {
     private var token: NSObjectProtocol?
@@ -13,10 +14,16 @@ final class ActiveAppObserver {
     private let titles = WindowTitleWatcher()
     private let onChange: @MainActor () -> Void
     private let isWatched: @MainActor (String) -> Bool
+    private let signalsOn: @MainActor () -> Bool
+    /// pid + title herdr was last read for: re-read only when they change (herdr retitles on pane focus).
+    private var herdrKey: String?
+    private var herdrBusy = false, herdrAgain: pid_t?
 
-    init(feed: AppDetectionFeed, isWatched: @escaping @MainActor (String) -> Bool, onChange: @escaping @MainActor () -> Void) {
+    init(feed: AppDetectionFeed, isWatched: @escaping @MainActor (String) -> Bool, signalsOn: @escaping @MainActor () -> Bool,
+         onChange: @escaping @MainActor () -> Void) {
         self.feed = feed
         self.isWatched = isWatched
+        self.signalsOn = signalsOn
         self.onChange = onChange
         let me = Bundle.main.bundleIdentifier
         if let front = NSWorkspace.shared.frontmostApplication, let id = front.bundleIdentifier, id != me {
@@ -38,9 +45,30 @@ final class ActiveAppObserver {
             feed.emit(.activeAppChanged(bundleID: id, windowTitle: nil))
             return onChange()
         }
-        titles.watch(pid: app.processIdentifier) { [weak self] title, doc in
-            self?.feed.emit(.activeAppChanged(bundleID: id, windowTitle: title, documentPath: doc))
-            self?.onChange()
+        herdrKey = nil
+        let pid = app.processIdentifier
+        titles.watch(pid: pid) { [weak self] title, doc in
+            guard let self else { return }
+            feed.emit(.activeAppChanged(bundleID: id, windowTitle: title, documentPath: doc))
+            onChange()
+            let key = "\(pid)|\(title ?? "")"
+            if Tracker.terminalBundleIDs.contains(id), signalsOn(), key != herdrKey {
+                herdrKey = key
+                readHerdr(pid)
+            }
+        }
+    }
+
+    /// One `herdr api snapshot` at a time; changes meanwhile coalesce into one more read.
+    private func readHerdr(_ pid: pid_t) {
+        guard !herdrBusy else { herdrAgain = pid; return }
+        herdrBusy = true
+        Task { [weak self] in
+            let folder = await Task.detached { Herdr.focusedFolder(terminalPid: pid) }.value
+            guard let self else { return }
+            herdrBusy = false
+            if let folder { feed.emit(.folderSignal(path: folder)); onChange() }
+            if let again = herdrAgain { herdrAgain = nil; readHerdr(again) }
         }
     }
 }
@@ -92,6 +120,12 @@ struct WatchedAppsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Grant Accessibility…") { AccessibilityAccess.requestWithPrompt() }
                 }
+            }
+            Section("Developer tools") {
+                Toggle("Use folder signals from developer tools (herdr, Claude Code hook)", isOn: Binding(
+                    get: { model.folderSignals }, set: { model.setFolderSignals($0) }))
+                Text("When a Watched terminal is in front, the folder you're working in (herdr's focused pane, or a folder sent by a Claude Code hook in the last 5 minutes) picks the Project through Project folders. Setup: docs/developer-tools.md in the Wabbit repository.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Watched Apps") {
                 ForEach(model.watchedApps, id: \.bundleID) { app in

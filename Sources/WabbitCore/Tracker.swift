@@ -95,6 +95,7 @@ public final class Tracker {
         handleIdleEvent(event)
         handleMeetingEvent(event)
         handleWatchedAppEvent(event)
+        handleFolderSignal(event)
     }
 
     // MARK: Commands

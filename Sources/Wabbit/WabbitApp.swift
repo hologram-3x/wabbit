@@ -169,6 +169,9 @@ final class TrayModel {
     let notifier = Notifier()
     private(set) var watchedApps: [WatchedApp] = []
     private(set) var watchedDelaySeconds = 30
+    /// Folder signals from developer tools (herdr, Claude Code hook via `signalSocket`); off by default.
+    private(set) var folderSignals = false
+    private var signalSocket: FolderSignalSocket?
     private(set) var titleRules: [String: [TitleRule]] = [:]
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
@@ -216,8 +219,12 @@ final class TrayModel {
         media = MediaDetection { [weak self] in self?.mediaChanged($0) }
         activeApp = ActiveAppObserver(feed: feed, isWatched: { [weak self] id in
             self?.watchedApps.contains { $0.bundleID == id } == true
-        }) { [weak self] in self?.scheduleWatchedCheck() }
+        }, signalsOn: { [weak self] in self?.folderSignals == true }) { [weak self] in self?.scheduleWatchedCheck() }
         scheduleWatchedCheck()
+        updateSignalSocket()
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.signalSocket?.stop() } }
         // After sleep, timers are stale: re-read the running Session and the clock.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
@@ -234,6 +241,25 @@ final class TrayModel {
         let delay = TimeInterval(watchedDelaySeconds)
         watchedTimer = Timer.scheduledTimer(withTimeInterval: delay + 0.5, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.watchedPrompt = self?.tracker.pendingWatchedAppPrompt() }
+        }
+    }
+
+    func setFolderSignals(_ on: Bool) {
+        act { try tracker.setFolderSignalsEnabled(on) }
+        updateSignalSocket()
+    }
+
+    /// The socket exists only while folder signals are on.
+    private func updateSignalSocket() {
+        if folderSignals, signalSocket == nil {
+            signalSocket = FolderSignalSocket { [weak self] line in
+                self?.feed.emit(.folderSignal(path: line))
+                self?.scheduleWatchedCheck()
+            }
+        } else if !folderSignals {
+            signalSocket?.stop()
+            signalSocket = nil
+            unlink(FolderSignalSocket.path)  // one left by a crash or kill
         }
     }
 
@@ -273,6 +299,7 @@ final class TrayModel {
             watchedPrompt = tracker.pendingWatchedAppPrompt()
             watchedApps = try tracker.watchedApps()
             watchedDelaySeconds = Int(try tracker.watchedAppDelay())
+            folderSignals = try tracker.folderSignalsEnabled()
             titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
             amountMode = try tracker.amountMode()
             taxBps = try tracker.taxRateBps()

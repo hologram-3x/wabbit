@@ -18,6 +18,8 @@ public enum DetectionEvent: Equatable, Sendable {
     case calendarEventCurrent(title: String, attendeeEmails: [String])
     /// `documentPath`: the focused window's document (AXDocument file path), Watched Apps only.
     case activeAppChanged(bundleID: String, windowTitle: String?, documentPath: String? = nil)
+    /// "Working in <folder>" from a developer tool (herdr pane, local socket); validated by the core.
+    case folderSignal(path: String)
     case userIdle(since: Date)
     case userActive
 }
