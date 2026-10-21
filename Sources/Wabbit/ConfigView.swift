@@ -9,6 +9,19 @@ struct ConfigView: View {
     @FocusState private var focus: Field?
     private enum Field { case rate, tax }
 
+    /// A time-of-day (minutes since midnight in the working hours) as a Date for the DatePicker.
+    private func minuteBinding(_ kp: WritableKeyPath<WorkingHours, Int>) -> Binding<Date> {
+        let cal = Calendar.current
+        return Binding(
+            get: { cal.date(byAdding: .minute, value: model.workingHours[keyPath: kp], to: cal.startOfDay(for: Date())) ?? Date() },
+            set: {
+                var w = model.workingHours
+                let c = cal.dateComponents([.hour, .minute], from: $0)
+                w[keyPath: kp] = c.hour! * 60 + c.minute!
+                model.setWorkingHours(w)
+            })
+    }
+
     var body: some View {
         Form {
             Section("Money") {
@@ -35,6 +48,27 @@ struct ConfigView: View {
                 Stepper("Watched App prompt after \(model.watchedDelaySeconds) s in front",
                         value: Binding(get: { model.watchedDelaySeconds }, set: { model.setWatchedDelay($0) }),
                         in: 5...600, step: 5)
+            }
+            Section("Working hours") {
+                Toggle("Only prompt for Watched Apps during working hours", isOn: Binding(
+                    get: { model.workingHours.enabled }, set: { var w = model.workingHours; w.enabled = $0; model.setWorkingHours(w) }))
+                if model.workingHours.enabled {
+                    let cal = Calendar.current
+                    HStack(spacing: 4) {
+                        ForEach(0..<7, id: \.self) { i in
+                            let day = (cal.firstWeekday - 1 + i) % 7 + 1 // Calendar weekday, locale's first day first
+                            Toggle(cal.shortStandaloneWeekdaySymbols[day - 1], isOn: Binding(
+                                get: { model.workingHours.weekdays.contains(day) },
+                                set: { var w = model.workingHours
+                                       if $0 { w.weekdays.insert(day) } else { w.weekdays.remove(day) }
+                                       model.setWorkingHours(w) }))
+                            .toggleStyle(.button).controlSize(.small)
+                        }
+                    }
+                    DatePicker("From", selection: minuteBinding(\.startMinute), displayedComponents: .hourAndMinute)
+                    DatePicker("To", selection: minuteBinding(\.endMinute), displayedComponents: .hourAndMinute)
+                    Text("Meetings and idle prompts are not affected.").foregroundStyle(.secondary).font(.caption)
+                }
             }
             Section("Export rounding") {
                 Picker("Step", selection: Binding(

@@ -114,7 +114,7 @@ extension TrayModel {
         guard let prompt = watchedPrompt, notifies(.watched) else { return notifier.remove(.watched) }
         let start = prompt.projectId.map { [("accept", (running == nil ? "Start " : "Switch to ") + label(for: $0))] } ?? []
         notifier.post(.watched, title: "Track time for \(prompt.appName)?",
-                      body: "",
+                      body: prompt.projectId.map { "Suggested: \(label(for: $0)). Click to choose another." } ?? "Click to choose a Project",
                       actions: start + [("other", "Choose Project…"), ("notNow", "Not now"), ("notToday", "Not today")])
     }
 

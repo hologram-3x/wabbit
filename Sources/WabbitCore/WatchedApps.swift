@@ -35,18 +35,19 @@ final class WatchedAppRuntime {
     /// Front browser tab's address (normalised), from `.browserAddress`; cleared when the app changes.
     var address: (host: String, path: String)?
     var since = Date.distantPast
-    /// "Not now": until the app leaves the front.
-    var notNow = false
+    /// "Not now": per app, for `notNowDuration`.
+    var notNowUntil: [String: Date] = [:]
     /// "Not today": per app, until local midnight.
     var notToday: [String: Date] = [:]
-    /// The app that was in front just before, so a quick alt-tab back keeps the dwell time and snoozes.
-    var away: (bundleID: String, since: Date, leftAt: Date, notNow: Bool)?
+    /// The app that was in front just before, so a quick alt-tab back keeps the dwell time.
+    var away: (bundleID: String, since: Date, leftAt: Date)?
 }
 
 extension Tracker {
     static let watchedDelayKey = "watchedAppDelaySeconds"
     public static let watchedDelayRange: ClosedRange<TimeInterval> = 5...600
     public static let watchedDelayDefault: TimeInterval = 30
+    public static let notNowDuration: TimeInterval = 3600
 
     static func migrateWatchedApps(_ db: Database) throws {
         try db.create(table: "watchedApp", ifNotExists: true) { t in
@@ -104,7 +105,8 @@ extension Tracker {
         let now = clock.now()
         guard let id = w.front,
               now.timeIntervalSince(w.since) >= ((try? watchedAppDelay()) ?? Self.watchedDelayDefault),
-              !w.notNow,
+              (w.notNowUntil[id] ?? .distantPast) <= now,
+              workingHours().contains(now),
               (w.notToday[id] ?? .distantPast) <= now,
               let app = try? db.read({ try WatchedApp.fetchOne($0, key: id) })
         else { return nil }
@@ -122,8 +124,21 @@ extension Tracker {
         return WatchedAppPrompt(bundleID: id, appName: app.name, projectId: matched)
     }
 
-    /// "Not now": quiet until the app leaves the front.
-    public func snoozeWatchedAppNotNow() { watched.notNow = true }
+    /// "Not now": quiet for this app for an hour, however often the user switches away and back.
+    public func snoozeWatchedAppNotNow() {
+        guard let id = watched.front else { return }
+        watched.notNowUntil[id] = clock.now().addingTimeInterval(Self.notNowDuration)
+    }
+
+    /// When a prompt for the front app that is held back by a snooze or by working hours may come back;
+    /// the shell schedules one check then. Nil when nothing is holding it.
+    public func watchedPromptResumeAt() -> Date? {
+        guard let id = watched.front else { return nil }
+        let now = clock.now()
+        let wh = workingHours()
+        let ends = [watched.notNowUntil[id], watched.notToday[id], wh.contains(now) ? nil : wh.nextOpen(after: now)]
+        return ends.compactMap { $0 }.filter { $0 > now }.max()
+    }
 
     /// "Not today": quiet for this app until local midnight.
     public func snoozeWatchedAppNotToday() {
@@ -146,16 +161,67 @@ extension Tracker {
         let resume = w.away.flatMap { $0.bundleID == id && now.timeIntervalSince($0.leftAt) < delay ? $0 : nil }
         // Only watched apps are remembered, so hopping through unwatched apps keeps the last stay.
         if let old = w.front, (try? db.read { try WatchedApp.fetchOne($0, key: old) }) != nil {
-            w.away = (old, w.since, now, w.notNow)
+            w.away = (old, w.since, now)
         }
         if let resume {
             // Quick alt-tab back: same stay, so no new prompt cycle.
             w.since = resume.since
-            w.notNow = resume.notNow
         } else {
             w.since = now
-            w.notNow = false
         }
         w.front = id
+    }
+}
+
+/// When Watched App prompts may appear. Off = always. Meeting and Idle prompts ignore it.
+/// `end <= start` runs overnight (22:00-02:00). Weekdays use `Calendar` numbering (1 = Sunday).
+public struct WorkingHours: Equatable, Sendable {
+    public var enabled = false
+    public var weekdays: Set<Int> = [2, 3, 4, 5, 6]
+    public var startMinute = 9 * 60
+    public var endMinute = 18 * 60
+
+    public init(enabled: Bool = false, weekdays: Set<Int> = [2, 3, 4, 5, 6], startMinute: Int = 540, endMinute: Int = 1080) {
+        self.enabled = enabled; self.weekdays = weekdays; self.startMinute = startMinute; self.endMinute = endMinute
+    }
+
+    public func contains(_ date: Date, calendar cal: Calendar = .current) -> Bool {
+        guard enabled else { return true }
+        let c = cal.dateComponents([.weekday, .hour, .minute], from: date)
+        let m = c.hour! * 60 + c.minute!, day = c.weekday!
+        if startMinute < endMinute { return weekdays.contains(day) && m >= startMinute && m < endMinute }
+        // Overnight: the evening belongs to its own day, the small hours to the day before.
+        return (weekdays.contains(day) && m >= startMinute) || (weekdays.contains(day == 1 ? 7 : day - 1) && m < endMinute)
+    }
+
+    /// The next start time on a selected weekday after `date` (a window opens only at a start time).
+    public func nextOpen(after date: Date, calendar cal: Calendar = .current) -> Date? {
+        guard enabled, !weekdays.isEmpty else { return nil }
+        let day0 = cal.startOfDay(for: date)
+        for i in 0...7 {
+            guard let day = cal.date(byAdding: .day, value: i, to: day0),
+                  weekdays.contains(cal.component(.weekday, from: day)),
+                  let t = cal.date(byAdding: .minute, value: startMinute, to: day), t > date else { continue }
+            return t
+        }
+        return nil
+    }
+}
+
+extension Tracker {
+    static let workingHoursKey = "watchedWorkingHours"
+
+    public func workingHours() -> WorkingHours {
+        // Stored as "on|2,3,4|540|1080".
+        guard let raw = try? db.read({ try Self.setting($0, Self.workingHoursKey) }) else { return WorkingHours() }
+        let p = raw.split(separator: "|", omittingEmptySubsequences: false)
+        guard p.count == 4, let s = Int(p[2]), let e = Int(p[3]) else { return WorkingHours() }
+        return WorkingHours(enabled: p[0] == "1", weekdays: Set(p[1].split(separator: ",").compactMap { Int($0) }),
+                            startMinute: s, endMinute: e)
+    }
+
+    public func setWorkingHours(_ w: WorkingHours) throws {
+        let days = w.weekdays.sorted().map(String.init).joined(separator: ",")
+        try db.write { try Self.setSetting($0, Self.workingHoursKey, "\(w.enabled ? 1 : 0)|\(days)|\(w.startMinute)|\(w.endMinute)") }
     }
 }

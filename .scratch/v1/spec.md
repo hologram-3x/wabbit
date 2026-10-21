@@ -145,7 +145,8 @@ Hours is a native macOS menu-bar app that stays running all day with a very smal
 - **Watched App prompt:**
   - Shown when the app has been in front longer than the delay setting, and either no Session is running or the matched Project differs from the running one.
   - Rules are evaluated in order, then the app's default Project.
-  - Snoozes are kept per app until their expiry ("not now" = until the app leaves the front; "not today" = until local midnight).
+  - Working hours (optional, off by default): Watched App prompts appear only on the chosen weekdays between a start and end time (end <= start runs overnight); Meeting and Idle prompts are unaffected.
+  - Snoozes are kept per app until their expiry ("not now" = 1 hour, however often the user switches away and back; "not today" = until local midnight).
 - **Storage:** SQLite with versioned migrations. Backup = a consistent copy of the database file; restore replaces it after confirmation.
 - **macOS detection in the shell:** event listeners for microphone and camera state and active-app changes; Accessibility API for window titles; idle time polled at most every 30 s; calendar via EventKit with full-access permission.
 - **Footprint budget is an acceptance criterion:** under 30 MB of memory and about 0% CPU at rest; no windows created until opened.

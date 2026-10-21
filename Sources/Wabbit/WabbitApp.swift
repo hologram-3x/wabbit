@@ -173,6 +173,7 @@ final class TrayModel {
     private(set) var watchedDelaySeconds = 30
     /// Folder signals from developer tools (herdr, Claude Code hook via `signalSocket`); off by default.
     private(set) var folderSignals = false
+    private(set) var workingHours = WorkingHours()
     private var signalSocket: FolderSignalSocket?
     private(set) var titleRules: [String: [TitleRule]] = [:]
     /// Idle Session left by Split, awaiting assign or drop.
@@ -239,13 +240,20 @@ final class TrayModel {
     }
 
     /// One-shot timer for when the front app's delay is up; nothing runs while no app is waiting.
-    private func scheduleWatchedCheck() {
+    /// When a snooze or working hours hold the prompt back, the check is set for when they end.
+    func scheduleWatchedCheck() {
         watchedTimer?.invalidate()
         watchedPrompt = tracker.pendingWatchedAppPrompt()
-        let delay = TimeInterval(watchedDelaySeconds)
+        var delay = TimeInterval(watchedDelaySeconds)
+        if let resume = tracker.watchedPromptResumeAt() { delay = max(delay, resume.timeIntervalSinceNow) }
         watchedTimer = Timer.scheduledTimer(withTimeInterval: delay + 0.5, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.watchedPrompt = self?.tracker.pendingWatchedAppPrompt() }
         }
+    }
+
+    func setWorkingHours(_ w: WorkingHours) {
+        act { try tracker.setWorkingHours(w) }
+        scheduleWatchedCheck()
     }
 
     func setFolderSignals(_ on: Bool) {
@@ -305,6 +313,7 @@ final class TrayModel {
             watchedApps = try tracker.watchedApps()
             watchedDelaySeconds = Int(try tracker.watchedAppDelay())
             folderSignals = try tracker.folderSignalsEnabled()
+            workingHours = tracker.workingHours()
             titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
             amountMode = try tracker.amountMode()
             taxBps = try tracker.taxRateBps()

@@ -281,7 +281,7 @@ struct WatchedAppPromptSection: View {
                 ForEach(model.projects) { Text(model.label(for: $0.id!)).tag(Optional($0.id!)) }
             }
             HStack {
-                Button("Not now") { model.snoozeWatched(today: false) }
+                Button("Not now") { model.snoozeWatched(today: false) }.help("Quiet for 1 hour")
                 Button("Not today") { model.snoozeWatched(today: true) }
                 Button(model.running == nil ? "Start" : "Switch to") {
                     if let chosen { model.acceptWatchedPrompt(projectId: chosen) }
@@ -323,5 +323,6 @@ extension TrayModel {
     func snoozeWatched(today: Bool) {
         today ? tracker.snoozeWatchedAppNotToday() : tracker.snoozeWatchedAppNotNow()
         refresh()
+        scheduleWatchedCheck()
     }
 }
