@@ -84,6 +84,7 @@ public final class Tracker {
         registerDefaultRateBackfillMigration(&m)
         registerColorMigration(&m)
         m.registerMigration("v12-project-folders", migrate: migrateProjectFolders)
+        m.registerMigration("v13-project-addresses", migrate: migrateProjectAddresses)
         return m
     }
 
@@ -96,6 +97,7 @@ public final class Tracker {
         handleMeetingEvent(event)
         handleWatchedAppEvent(event)
         handleFolderSignal(event)
+        handleBrowserAddress(event)
     }
 
     // MARK: Commands

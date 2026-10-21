@@ -161,6 +161,8 @@ final class TrayModel {
     private(set) var closedIds: Set<Int64> = []
     private(set) var domains: [Int64: [String]] = [:]
     private(set) var folders: [Int64: [ProjectFolder]] = [:]
+    private(set) var addresses: [Int64: [ProjectAddress]] = [:]
+    var hasOpenAddresses: Bool { addresses.contains { !closedIds.contains($0.key) && !$0.value.isEmpty } }
     private(set) var idleThresholdMinutes: Int = 15
     private(set) var idlePrompt: IdlePrompt? { didSet { if idlePrompt != oldValue { notifyIdle() } } }
     private(set) var watchedPrompt: WatchedAppPrompt? { didSet { if watchedPrompt != oldValue { notifyWatched(); watchedPanel?.close(); watchedPanel = nil } } }
@@ -220,7 +222,8 @@ final class TrayModel {
         media = MediaDetection { [weak self] in self?.mediaChanged($0) }
         activeApp = ActiveAppObserver(feed: feed, isWatched: { [weak self] id in
             self?.watchedApps.contains { $0.bundleID == id } == true
-        }, signalsOn: { [weak self] in self?.folderSignals == true }) { [weak self] in self?.scheduleWatchedCheck() }
+        }, signalsOn: { [weak self] in self?.folderSignals == true },
+           addressesOn: { [weak self] in self?.hasOpenAddresses == true }) { [weak self] in self?.scheduleWatchedCheck() }
         scheduleWatchedCheck()
         updateSignalSocket()
         NotificationCenter.default.addObserver(
@@ -291,6 +294,7 @@ final class TrayModel {
             allClients = try tracker.clients()
             domains = Dictionary(uniqueKeysWithValues: try allClients.map { ($0.id!, try tracker.domains(clientId: $0.id!)) })
             folders = Dictionary(uniqueKeysWithValues: try allProjects.map { ($0.id!, try tracker.projectFolders(projectId: $0.id!)) })
+            addresses = Dictionary(uniqueKeysWithValues: try allProjects.map { ($0.id!, try tracker.projectAddresses(projectId: $0.id!)) })
             clients = Dictionary(uniqueKeysWithValues: try tracker.clients().map { ($0.id!, $0.name) })
             running = try tracker.runningSession()
             quickStart = try tracker.quickStartProjects(limit: Self.quickStartCount)
@@ -347,6 +351,16 @@ final class TrayModel {
         act {
             do { try tracker.addProjectFolder(projectId: p.id!, path: url.path) } catch ProjectFolderError.alreadyLinked(let other) {
                 throw FolderLinked(message: "That folder is already linked to \(label(forAny: other)).")
+            }
+        }
+    }
+    func removeAddress(_ a: ProjectAddress) { act { try tracker.removeProjectAddress(id: a.id!) } }
+    func addAddress(_ p: Project, _ address: String) {
+        act {
+            do { try tracker.addProjectAddress(projectId: p.id!, address: address) } catch ProjectAddressError.alreadyLinked(let other) {
+                throw FolderLinked(message: "That address is already linked to \(label(forAny: other)).")
+            } catch ProjectAddressError.invalid {
+                throw FolderLinked(message: "That isn't a web address.")
             }
         }
     }
@@ -758,10 +772,12 @@ struct ManageView: View {
     }
 }
 
-/// A Project's folders: a Watched App's front document inside one suggests this Project.
+/// A Project's folders and addresses: a Watched App's front document inside a folder, or a Watched browser's
+/// front tab under an address, suggests this Project.
 struct ProjectFoldersRow: View {
     let model: TrayModel
     let project: Project
+    @State private var address = ""
     var body: some View {
         ForEach(model.folders[project.id!] ?? []) { f in
             HStack {
@@ -775,6 +791,22 @@ struct ProjectFoldersRow: View {
         }
         Button("Add Folder…") { model.addFolder(project) }
             .buttonStyle(.link).padding(.leading, 24)
+        ForEach(model.addresses[project.id!] ?? []) { a in
+            HStack {
+                Label(a.display, systemImage: "globe")
+                    .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                Spacer()
+                Button("Remove", systemImage: "minus.circle") { model.removeAddress(a) }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+            }
+            .padding(.leading, 24)
+        }
+        TextField("Add Address…", text: $address)
+            .onSubmit {
+                model.addAddress(project, address)
+                if model.error == nil { address = "" }
+            }
+            .padding(.leading, 24)
     }
 }
 

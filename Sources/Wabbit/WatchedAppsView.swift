@@ -15,15 +15,19 @@ final class ActiveAppObserver {
     private let onChange: @MainActor () -> Void
     private let isWatched: @MainActor (String) -> Bool
     private let signalsOn: @MainActor () -> Bool
+    /// True when some Open Project has an address: only then is a Watched browser asked for its tab.
+    private let addressesOn: @MainActor () -> Bool
     /// pid + title herdr was last read for: re-read only when they change (herdr retitles on pane focus).
     private var herdrKey: String?
     private var herdrBusy = false, herdrAgain: pid_t?
+    private var addressBusy = false, addressAgain: String?
 
     init(feed: AppDetectionFeed, isWatched: @escaping @MainActor (String) -> Bool, signalsOn: @escaping @MainActor () -> Bool,
-         onChange: @escaping @MainActor () -> Void) {
+         addressesOn: @escaping @MainActor () -> Bool, onChange: @escaping @MainActor () -> Void) {
         self.feed = feed
         self.isWatched = isWatched
         self.signalsOn = signalsOn
+        self.addressesOn = addressesOn
         self.onChange = onChange
         let me = Bundle.main.bundleIdentifier
         if let front = NSWorkspace.shared.frontmostApplication, let id = front.bundleIdentifier, id != me {
@@ -56,6 +60,21 @@ final class ActiveAppObserver {
                 herdrKey = key
                 readHerdr(pid)
             }
+            // A tab switch retitles the window, so this re-reads the address on every switch.
+            if BrowserAddress.isSupported(id), addressesOn() { readAddress(id) }
+        }
+    }
+
+    /// One Apple Event at a time, off the main actor; changes meanwhile coalesce into one more read.
+    private func readAddress(_ id: String) {
+        guard !addressBusy else { addressAgain = id; return }
+        addressBusy = true
+        Task { [weak self] in
+            let url = await Task.detached { BrowserAddress.frontURL(bundleID: id) }.value
+            guard let self else { return }
+            addressBusy = false
+            feed.emit(.browserAddress(bundleID: id, url: url)); onChange()
+            if let again = addressAgain { addressAgain = nil; readAddress(again) }
         }
     }
 
@@ -121,6 +140,14 @@ struct WatchedAppsView: View {
                     Button("Grant Accessibility…") { AccessibilityAccess.requestWithPrompt() }
                 }
             }
+            let browsers = model.watchedApps.filter { BrowserAddress.isSupported($0.bundleID) || BrowserAddress.firefoxBundleIDs.contains($0.bundleID) }
+            if !browsers.isEmpty {
+                Section("Browser addresses") {
+                    Text("When a Watched browser is in front and a Project has addresses (Clients & Projects), Wabbit asks the browser for the front tab's address and compares it with them. The address is never stored, logged or sent anywhere, and other apps are never asked. macOS asks once per browser whether Wabbit may do this; without it, prompts use title rules.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(browsers, id: \.bundleID) { BrowserAccessRow(app: $0) }
+                }
+            }
             Section("Developer tools") {
                 Toggle("Use folder signals from developer tools (herdr, Claude Code hook)", isOn: Binding(
                     get: { model.folderSignals }, set: { model.setFolderSignals($0) }))
@@ -159,6 +186,37 @@ struct WatchedAppsView: View {
         .formStyle(.grouped)
         .onAppear { installed = InstalledApp.scan() }
         .onDisappear { installed = [] }
+    }
+}
+
+/// Automation permission for one Watched browser: the system prompt only appears after "Allow…".
+struct BrowserAccessRow: View {
+    let app: WatchedApp
+    @State private var access: BrowserAddress.Access?
+
+    var body: some View {
+        HStack {
+            Text(app.name)
+            Spacer()
+            if BrowserAddress.firefoxBundleIDs.contains(app.bundleID) {
+                Text("Can't report its address: use title rules").foregroundStyle(.secondary)
+            } else {
+                switch access {
+                case .allowed: Text("Allowed").foregroundStyle(.secondary)
+                case .denied: Text("Not allowed: System Settings → Privacy & Security → Automation").foregroundStyle(.secondary)
+                case .notRunning: Text("Open it to allow").foregroundStyle(.secondary)
+                case .notAsked: Button("Allow…") { check(ask: true) }
+                case nil: ProgressView().controlSize(.small)
+                }
+            }
+        }
+        .font(.caption)
+        .task { check(ask: false) }
+    }
+
+    private func check(ask: Bool) {
+        let id = app.bundleID
+        Task { access = await Task.detached { BrowserAddress.access(id, ask: ask) }.value }
     }
 }
 

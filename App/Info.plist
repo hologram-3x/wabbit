@@ -26,6 +26,8 @@
 	<string>public.app-category.productivity</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Wabbit reads your calendar event when a call starts, to suggest the right Project. It works without it.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Wabbit asks a Watched browser for its front tab's address to suggest the Project linked to it. The address is only compared on this Mac, never stored or sent.</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/hologram-3x/wabbit/releases/latest/download/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>

@@ -38,12 +38,16 @@ for b in "$BIN"/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/
 [ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ] && plutil -replace SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$APP/Contents/Info.plist"
 
 # Inside-out, no --deep: Sparkle's helpers, then the framework, then the app.
+# Extra arguments (the app's entitlements) apply to hardened-runtime signing only.
 sign() {
-  if [ -n "${SIGN_IDENTITY:-}" ]; then codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$1"
-  else codesign --force --sign - "$1"; fi
+  local target="$1"; shift
+  if [ -n "${SIGN_IDENTITY:-}" ]; then codesign --force --options runtime --timestamp "$@" --sign "$SIGN_IDENTITY" "$target"
+  else codesign --force --sign - "$target"; fi
 }
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
-for code in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app" "$SPARKLE" "$APP"; do sign "$code"; done
+for code in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app" "$SPARKLE"; do sign "$code"; done
+# The hardened runtime blocks Apple Events (browser addresses) without this entitlement.
+sign "$APP" --entitlements App/Wabbit.entitlements
 codesign --verify --strict "$APP"
 
 if [ "${1:-}" = dmg ]; then

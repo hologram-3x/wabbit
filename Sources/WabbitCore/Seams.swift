@@ -20,6 +20,8 @@ public enum DetectionEvent: Equatable, Sendable {
     case activeAppChanged(bundleID: String, windowTitle: String?, documentPath: String? = nil)
     /// "Working in <folder>" from a developer tool (herdr pane, local socket); validated by the core.
     case folderSignal(path: String)
+    /// The front tab's address of a Watched browser (nil: unknown); only compared in memory, never stored.
+    case browserAddress(bundleID: String, url: String?)
     case userIdle(since: Date)
     case userActive
 }
