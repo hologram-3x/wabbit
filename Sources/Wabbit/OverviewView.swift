@@ -31,7 +31,7 @@ struct OverviewView: View {
             }
             TableColumn("Hours") { r in cell(r, hours(r.seconds), trailing: true) }
             TableColumn("Revenue") { r in cell(r, euro(r.revenueCents), trailing: true) }
-            TableColumn("Rate") { r in cell(r, r.p?.rateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
+            TableColumn(model.amountMode == .net ? "Net Rate" : "Gross Rate") { r in cell(r, r.p?.rateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
             TableColumn("Effective Rate") { r in cell(r, r.p?.effectiveRateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
             TableColumn("% of Estimate") { r in cell(r, r.p?.percentOfEstimate.map { "\(Int($0.rounded()))%" } ?? "", trailing: true) }
             TableColumn("Warnings") { r in
