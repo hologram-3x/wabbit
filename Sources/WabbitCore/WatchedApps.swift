@@ -28,6 +28,8 @@ final class WatchedAppRuntime {
     var front: String?
     /// Focused window title of the front app, nil when unknown (no Accessibility permission).
     var title: String?
+    /// Focused window's document path, normalised and lowercased; nil when none or unknown.
+    var document: String?
     var since = Date.distantPast
     /// "Not now": until the app leaves the front.
     var notNow = false
@@ -102,8 +104,8 @@ extension Tracker {
               (w.notToday[id] ?? .distantPast) <= now,
               let app = try? db.read({ try WatchedApp.fetchOne($0, key: id) })
         else { return nil }
-        // Title rules first, then the default; a Closed Project is no suggestion.
-        let matched = resolveProject(for: app, title: w.title)
+        // Document folder first, then title rules, then the default; a Closed Project is no suggestion.
+        let matched = w.document.flatMap(projectForNormalised) ?? resolveProject(for: app, title: w.title)
         let runningId = (try? runningSession())?.projectId
         if let matched {
             guard runningId != matched else { return nil }
@@ -126,10 +128,11 @@ extension Tracker {
     }
 
     func handleWatchedAppEvent(_ event: DetectionEvent) {
-        guard case .activeAppChanged(let id, let title) = event else { return }
+        guard case .activeAppChanged(let id, let title, let document) = event else { return }
         let w = watched
         let now = clock.now()
         w.title = title
+        w.document = document.map { Self.normalisedPath($0).lowercased() }
         guard id != w.front else { return } // same app, new window title: keeps the stay
         let delay = (try? watchedAppDelay()) ?? Self.watchedDelayDefault
         let resume = w.away.flatMap { $0.bundleID == id && now.timeIntervalSince($0.leftAt) < delay ? $0 : nil }

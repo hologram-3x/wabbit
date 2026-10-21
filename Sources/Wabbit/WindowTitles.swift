@@ -11,21 +11,22 @@ enum AccessibilityAccess {
     }
 }
 
-/// Reads the focused window title of one app and calls back when it changes
-/// (`kAXFocusedWindowChangedNotification` + `kAXTitleChangedNotification`). Notification-driven, no polling.
+/// Reads the focused window's title and document (`AXDocument`, file URLs only) of one app and calls back
+/// when they change (`kAXFocusedWindowChangedNotification` + `kAXTitleChangedNotification`; there is no
+/// document notification, the title changes with it). Notification-driven, no polling.
 /// Without the permission it reports nil and the core falls back to the app's default Project.
 @MainActor
 final class WindowTitleWatcher {
     private var observer: AXObserver?
     private var app: AXUIElement?
     private var window: AXUIElement?
-    private var onChange: (@MainActor (String?) -> Void)?
+    private var onChange: (@MainActor (_ title: String?, _ documentPath: String?) -> Void)?
 
     /// Starts watching `pid` (stopping any previous app) and reports the current title right away.
-    func watch(pid: pid_t, onChange: @escaping @MainActor (String?) -> Void) {
+    func watch(pid: pid_t, onChange: @escaping @MainActor (_ title: String?, _ documentPath: String?) -> Void) {
         stop()
         self.onChange = onChange
-        guard AccessibilityAccess.granted else { onChange(nil); return }
+        guard AccessibilityAccess.granted else { onChange(nil, nil); return }
         let app = AXUIElementCreateApplication(pid)
         self.app = app
         var obs: AXObserver?
@@ -67,7 +68,9 @@ final class WindowTitleWatcher {
         guard let app else { return }
         let win = Self.attribute(app, kAXFocusedWindowAttribute) as! AXUIElement?
         let title = win.flatMap { Self.attribute($0, kAXTitleAttribute) as? String }
-        onChange?(title?.isEmpty == false ? title : nil)
+        let doc = win.flatMap { Self.attribute($0, kAXDocumentAttribute) as? String }
+            .flatMap(URL.init(string:)).flatMap { $0.isFileURL ? $0.path : nil }
+        onChange?(title?.isEmpty == false ? title : nil, doc?.isEmpty == false ? doc : nil)
     }
 
     private static func attribute(_ el: AXUIElement, _ name: String) -> CFTypeRef? {

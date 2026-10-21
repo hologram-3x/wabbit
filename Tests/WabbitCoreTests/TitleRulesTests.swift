@@ -24,8 +24,8 @@ private func prompt(_ h: Harness, title: String?) -> Int64?? {
     let (h, site, app, other) = try setup()
     try h.tracker.addTitleRule(bundleID: code, kind: .contains, text: "acme", projectId: site.id!)
     try h.tracker.addTitleRule(bundleID: code, kind: .pattern, text: "^acme-.*", projectId: app.id!)
-    #expect(try prompt(h, title: "acme-site — VS Code") == site.id)
-    #expect(try prompt(h, title: "nothing") == other.id)
+    #expect(prompt(h, title: "acme-site — VS Code") == site.id)
+    #expect(prompt(h, title: "nothing") == other.id)
 }
 
 @Test func reorderingChangesTheWinner() throws {
@@ -35,13 +35,13 @@ private func prompt(_ h: Harness, title: String?) -> Int64?? {
     let first = try h.tracker.titleRules(bundleID: code)[0]
     try h.tracker.setTitleRuleOrder(bundleID: code, ids: [second.id!, first.id!])
     #expect(try h.tracker.titleRules(bundleID: code).map(\.id) == [second.id, first.id])
-    #expect(try prompt(h, title: "acme-site") == app.id)
+    #expect(prompt(h, title: "acme-site") == app.id)
 }
 
 @Test func missingTitleFallsBackToDefault() throws {
     let (h, site, _, other) = try setup()
     try h.tracker.addTitleRule(bundleID: code, kind: .contains, text: "acme", projectId: site.id!)
-    #expect(try prompt(h, title: nil) == other.id)
+    #expect(prompt(h, title: nil) == other.id)
 }
 
 @Test func titleChangeInSameStayRePicksProjectWithoutResettingDelay() throws {
@@ -58,7 +58,7 @@ private func prompt(_ h: Harness, title: String?) -> Int64?? {
     let (h, site, _, other) = try setup()
     try h.tracker.addTitleRule(bundleID: code, kind: .contains, text: "acme", projectId: site.id!)
     try h.tracker.closeProject(id: site.id!)
-    #expect(try prompt(h, title: "acme") == other.id)
+    #expect(prompt(h, title: "acme") == other.id)
     #expect(throws: TitleRuleError.invalidPattern) { try h.tracker.addTitleRule(bundleID: code, kind: .pattern, text: "(", projectId: other.id!) }
     #expect(throws: TitleRuleError.emptyPattern) { try h.tracker.addTitleRule(bundleID: code, kind: .contains, text: " ", projectId: other.id!) }
     #expect(throws: WabbitError.projectClosed) { try h.tracker.addTitleRule(bundleID: code, kind: .contains, text: "x", projectId: site.id!) }

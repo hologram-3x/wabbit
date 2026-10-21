@@ -11,7 +11,7 @@ Wabbit suggests the Project you're working on from what is in front of you, not 
   3. the front browser tab's address, matched against Project addresses (ticket 03)
   4. existing window-title rules
   5. the Watched App's default Project
-- A match never starts tracking by itself. It feeds the existing Watched App prompt ("Track time for <Project>?", Start / Not now / Not today, notification included), with the same delay and snooze rules. An app with a matching document counts as watched even if it isn't in Watched Apps (setting, on by default).
+- A match never starts tracking by itself. It feeds the existing Watched App prompt ("Track time for <App>?", Start <Project> / Not now / Not today, notification included), with the same delay and snooze rules. Only Watched Apps are read: an app not in Watched Apps is never observed (no title, document, shell or tab), so a match only refines which Project a Watched App suggests.
 - Closed Projects never match.
 - Everything stays on the Mac; no paths or addresses leave it.
 
@@ -22,5 +22,5 @@ Wabbit suggests the Project you're working on from what is in front of you, not 
 
 ## Open questions
 
-- Should a match on a non-watched app prompt at all, or only refine watched ones? (Default above: prompt, behind a setting.)
+- ~~Should a match on a non-watched app prompt at all, or only refine watched ones?~~ Resolved: only refine. Non-watched apps are never observed (privacy).
 - Terminals with several tabs: is the front tab reliably detectable in Terminal, iTerm and Ghostty?

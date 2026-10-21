@@ -160,6 +160,7 @@ final class TrayModel {
     private(set) var allClients: [Client] = []
     private(set) var closedIds: Set<Int64> = []
     private(set) var domains: [Int64: [String]] = [:]
+    private(set) var folders: [Int64: [ProjectFolder]] = [:]
     private(set) var idleThresholdMinutes: Int = 15
     private(set) var idlePrompt: IdlePrompt? { didSet { if idlePrompt != oldValue { notifyIdle() } } }
     private(set) var watchedPrompt: WatchedAppPrompt? { didSet { if watchedPrompt != oldValue { notifyWatched() } } }
@@ -213,7 +214,9 @@ final class TrayModel {
         refresh()
         startIdlePolling()
         media = MediaDetection { [weak self] in self?.mediaChanged($0) }
-        activeApp = ActiveAppObserver(feed: feed) { [weak self] in self?.scheduleWatchedCheck() }
+        activeApp = ActiveAppObserver(feed: feed, isWatched: { [weak self] id in
+            self?.watchedApps.contains { $0.bundleID == id } == true
+        }) { [weak self] in self?.scheduleWatchedCheck() }
         scheduleWatchedCheck()
         // After sleep, timers are stale: re-read the running Session and the clock.
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -260,6 +263,7 @@ final class TrayModel {
             closedIds = Set(try tracker.closedProjects().compactMap(\.id))
             allClients = try tracker.clients()
             domains = Dictionary(uniqueKeysWithValues: try allClients.map { ($0.id!, try tracker.domains(clientId: $0.id!)) })
+            folders = Dictionary(uniqueKeysWithValues: try allProjects.map { ($0.id!, try tracker.projectFolders(projectId: $0.id!)) })
             clients = Dictionary(uniqueKeysWithValues: try tracker.clients().map { ($0.id!, $0.name) })
             running = try tracker.runningSession()
             quickStart = try tracker.quickStartProjects(limit: Self.quickStartCount)
@@ -304,6 +308,21 @@ final class TrayModel {
     }
     func addDomain(_ c: Client, _ d: String) { act { try tracker.addDomain(clientId: c.id!, d) } }
     func removeDomain(_ c: Client, _ d: String) { act { try tracker.removeDomain(clientId: c.id!, d) } }
+    func removeFolder(_ f: ProjectFolder) { act { try tracker.removeProjectFolder(id: f.id!) } }
+    /// Folder picker (directories only), then links the folder to `p`.
+    func addFolder(_ p: Project) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Add Folder"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        act {
+            do { try tracker.addProjectFolder(projectId: p.id!, path: url.path) } catch ProjectFolderError.alreadyLinked(let other) {
+                throw FolderLinked(message: "That folder is already linked to \(label(forAny: other)).")
+            }
+        }
+    }
+    private struct FolderLinked: Error, CustomStringConvertible { let message: String; var description: String { message } }
     /// Runs `body`, then refreshes; a failure stays in `error` (refresh would otherwise clear it).
     func act(_ body: () throws -> Void) {
         let ok = attempt(body), e = error
@@ -701,12 +720,33 @@ struct ManageView: View {
                             Button("Rate & Billing…") { editing = p }
                             Button(p.closedAt == nil ? "Close" : "Reopen") { model.setClosed(p, p.closedAt == nil) }
                         }
+                        ProjectFoldersRow(model: model, project: p)
                     }
                     NameField(text: "", prompt: "Add Project") { model.addProject(client, $0) }
                 }
             }
         }
         .sheet(item: $editing) { p in MoneyEditor(model: model, project: p) { editing = nil } }
+    }
+}
+
+/// A Project's folders: a Watched App's front document inside one suggests this Project.
+struct ProjectFoldersRow: View {
+    let model: TrayModel
+    let project: Project
+    var body: some View {
+        ForEach(model.folders[project.id!] ?? []) { f in
+            HStack {
+                Label((f.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
+                    .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                Spacer()
+                Button("Remove", systemImage: "minus.circle") { model.removeFolder(f) }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+            }
+            .padding(.leading, 24)
+        }
+        Button("Add Folder…") { model.addFolder(project) }
+            .buttonStyle(.link).padding(.leading, 24)
     }
 }
 

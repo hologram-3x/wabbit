@@ -3,7 +3,8 @@ import WabbitCore
 import SwiftUI
 
 /// Turns `NSWorkspace.didActivateApplicationNotification` into `activeAppChanged` events.
-/// Notification-driven: no polling. Window titles (for title rules) need Accessibility; without it they are nil. Wabbit itself is ignored so opening its
+/// Notification-driven: no polling. Window titles and documents are read for Watched Apps only (other apps are never
+/// observed beyond their bundle ID) and need Accessibility; without it they are nil. Wabbit itself is ignored so opening its
 /// own windows doesn't count as leaving the Watched App.
 @MainActor
 final class ActiveAppObserver {
@@ -11,9 +12,11 @@ final class ActiveAppObserver {
     private let feed: AppDetectionFeed
     private let titles = WindowTitleWatcher()
     private let onChange: @MainActor () -> Void
+    private let isWatched: @MainActor (String) -> Bool
 
-    init(feed: AppDetectionFeed, onChange: @escaping @MainActor () -> Void) {
+    init(feed: AppDetectionFeed, isWatched: @escaping @MainActor (String) -> Bool, onChange: @escaping @MainActor () -> Void) {
         self.feed = feed
+        self.isWatched = isWatched
         self.onChange = onChange
         let me = Bundle.main.bundleIdentifier
         if let front = NSWorkspace.shared.frontmostApplication, let id = front.bundleIdentifier, id != me {
@@ -30,8 +33,13 @@ final class ActiveAppObserver {
 
     /// Emits the app now and again on every window or title change while it stays in front.
     private func follow(_ app: NSRunningApplication, _ id: String) {
-        titles.watch(pid: app.processIdentifier) { [weak self] title in
-            self?.feed.emit(.activeAppChanged(bundleID: id, windowTitle: title))
+        guard isWatched(id) else {
+            titles.stop()
+            feed.emit(.activeAppChanged(bundleID: id, windowTitle: nil))
+            return onChange()
+        }
+        titles.watch(pid: app.processIdentifier) { [weak self] title, doc in
+            self?.feed.emit(.activeAppChanged(bundleID: id, windowTitle: title, documentPath: doc))
             self?.onChange()
         }
     }
@@ -64,11 +72,11 @@ struct WatchedAppsView: View {
 
     var body: some View {
         Form {
-            Section("Window titles") {
+            Section("Window titles and documents") {
                 if AccessibilityAccess.granted {
-                    Text("Accessibility is on: title rules can pick the Project.").font(.caption)
+                    Text("Accessibility is on: Project folders and title rules can pick the Project.").font(.caption)
                 } else {
-                    Text("Title rules read the front window's title of a Watched App, which macOS only allows with the Accessibility permission. Wabbit reads nothing else and never records screens. Without it, prompts use the app's default Project.")
+                    Text("Project folders and title rules read the front window's document and title of a Watched App (other apps are never read), which macOS only allows with the Accessibility permission. Wabbit reads nothing else and never records screens. Without it, prompts use the app's default Project.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Grant Accessibility…") { AccessibilityAccess.requestWithPrompt() }
                 }

@@ -83,6 +83,7 @@ public final class Tracker {
         m.registerMigration("v8-title-rules", migrate: migrateTitleRules)
         registerDefaultRateBackfillMigration(&m)
         registerColorMigration(&m)
+        m.registerMigration("v12-project-folders", migrate: migrateProjectFolders)
         return m
     }
 

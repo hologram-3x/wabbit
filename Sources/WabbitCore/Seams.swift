@@ -16,7 +16,8 @@ public enum DetectionEvent: Equatable, Sendable {
     case microphone(on: Bool)
     case camera(on: Bool)
     case calendarEventCurrent(title: String, attendeeEmails: [String])
-    case activeAppChanged(bundleID: String, windowTitle: String?)
+    /// `documentPath`: the focused window's document (AXDocument file path), Watched Apps only.
+    case activeAppChanged(bundleID: String, windowTitle: String?, documentPath: String? = nil)
     case userIdle(since: Date)
     case userActive
 }
