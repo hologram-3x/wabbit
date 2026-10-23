@@ -107,6 +107,7 @@ struct InstalledApp: Hashable {
                 if let app = at(URL(fileURLWithPath: dir).appending(path: file)) { found[app.bundleID] = app }
             }
         }
+        found[Bundle.main.bundleIdentifier ?? ""] = nil  // Wabbit itself is never a work app
         return found.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -121,7 +122,8 @@ struct InstalledApp: Hashable {
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.prompt = "Watch"
-        return panel.runModal() == .OK ? panel.url.flatMap(at) : nil
+        guard panel.runModal() == .OK, let app = panel.url.flatMap(at), app.bundleID != Bundle.main.bundleIdentifier else { return nil }
+        return app
     }
 }
 
