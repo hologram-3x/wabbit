@@ -29,7 +29,9 @@ struct OverviewView: View {
                     cell(r, r.name)
                 }
             }
+            .width(min: 160, ideal: 240)
             TableColumn("Hours") { r in cell(r, hours(r.seconds), trailing: true) }
+                .width(min: 50, ideal: 64)
             TableColumn("\(modeLabel) Revenue") { r in cell(r, euro(r.revenueCents), trailing: true) }
             TableColumn("\(modeLabel) Rate") { r in cell(r, r.p?.rateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
             TableColumn("\(modeLabel) Effective Rate") { r in cell(r, r.p?.effectiveRateCents.map { euro($0, perHour: true) } ?? "", trailing: true) }
@@ -76,7 +78,7 @@ struct OverviewView: View {
     /// Client rows (no Project) are larger and taller, so each Client reads as a group; Closed Projects are greyed.
     private func cell(_ r: Row, _ text: String, trailing: Bool = false) -> some View {
         Text(text)
-            .font(r.p == nil ? .title3.weight(.semibold) : .body)
+            .font(r.p == nil ? .system(size: 13, weight: .semibold) : .body)
             .monospacedDigit()
             .foregroundStyle(r.p?.closed == true ? .secondary : .primary)
             .padding(.vertical, r.p == nil ? 6 : 0)
