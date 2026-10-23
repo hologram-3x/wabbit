@@ -197,6 +197,8 @@ final class TrayModel {
     var error: String?
     /// Main window's selected pane; the tray can open it at a given one.
     var pane: Pane = .overview
+    /// Clients & Projects' selected Client, kept while the app runs (nil: the first one).
+    var selectedClientId: Int64?
     private(set) var amountMode = AmountMode.gross
     private(set) var taxBps = 0
     private(set) var defaultRateCents: Int?
@@ -295,6 +297,25 @@ final class TrayModel {
         allProjects.first { $0.id == projectId }?.color
     }
 
+    func client(for projectId: Int64) -> Client? {
+        allProjects.first { $0.id == projectId }.flatMap { p in allClients.first { $0.id == p.clientId } }
+    }
+
+    /// A Client's tile colour where no Project is beside it: its first Open Project's, else gray.
+    func clientColor(_ c: Client) -> ProjectColor {
+        allProjects.first { $0.clientId == c.id && $0.closedAt == nil }?.color ?? .gray
+    }
+
+    func setIcon(_ c: Client, _ svg: String?) {
+        act {
+            do { try tracker.setIcon(clientId: c.id!, svg: svg) } catch ClientIconError.tooLarge {
+                throw FolderLinked(message: "That SVG is larger than 256 KB.")
+            } catch ClientIconError.notSVG {
+                throw FolderLinked(message: "That file isn't an SVG.")
+            }
+        }
+    }
+
     func setColor(_ p: Project, _ c: ProjectColor) { act { try tracker.setColor(projectId: p.id!, c) } }
 
     func shortName(for projectId: Int64) -> String {
@@ -383,9 +404,9 @@ final class TrayModel {
     func addAddress(_ p: Project, _ address: String) {
         act {
             do { try tracker.addProjectAddress(projectId: p.id!, address: address) } catch ProjectAddressError.alreadyLinked(let other) {
-                throw FolderLinked(message: "That address is already linked to \(label(forAny: other)).")
+                throw FolderLinked(message: "That website is already linked to \(label(forAny: other)).")
             } catch ProjectAddressError.invalid {
-                throw FolderLinked(message: "That isn't a web address.")
+                throw FolderLinked(message: "That isn't a website or web address.")
             }
         }
     }
@@ -397,7 +418,7 @@ final class TrayModel {
         if !ok { error = e }
     }
     func createClient(_ name: String, firstProject: String) -> Bool {
-        attempt { try tracker.createClient(name: name, firstProject: firstProject) }
+        attempt { selectedClientId = try tracker.createClient(name: name, firstProject: firstProject).0.id }
     }
 
     func setIdleThresholdMinutes(_ minutes: Int) { act { try tracker.setIdleThreshold(TimeInterval(minutes * 60)) } }
@@ -621,10 +642,17 @@ struct TrayView: View {
                 WatchedAppPromptSection(model: model, prompt: watched)
             }
             if let running = model.running {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.label(for: running.projectId)).font(.headline).lineLimit(1)
-                        Text(running.start, style: .timer).monospacedDigit().foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    ClientIcon(client: model.client(for: running.projectId), color: model.color(for: running.projectId), size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(model.client(for: running.projectId)?.name ?? "?").font(.body.weight(.semibold)).lineLimit(1)
+                        HStack(spacing: 5) {
+                            ProjectDot(color: model.color(for: running.projectId))
+                            Text(model.shortName(for: running.projectId)).lineLimit(1)
+                            Text("·")
+                            Text(running.start, style: .timer).monospacedDigit()
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button { model.stop(); model.refresh() } label: {
@@ -656,10 +684,15 @@ struct TrayView: View {
             let isRunning = model.running?.projectId == project.id
             Button { model.start(project); model.refresh() } label: {
                 TrayRow {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(project.name).lineLimit(1)
-                            Text(model.clients[project.clientId] ?? "?").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    HStack(spacing: 10) {
+                        ClientIcon(client: model.client(for: project.id!), color: project.color, size: 28)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(model.clients[project.clientId] ?? "?").font(.body.weight(.semibold)).lineLimit(1)
+                            HStack(spacing: 5) {
+                                ProjectDot(color: project.color)
+                                Text(project.name).lineLimit(1)
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Image(systemName: isRunning ? "checkmark.circle.fill" : "play.circle")
@@ -675,7 +708,7 @@ struct TrayView: View {
             TrayRow {
                 Menu {
                     ForEach(others) { project in
-                        Button(model.label(for: project.id!)) { model.start(project); model.refresh() }
+                        Button("\(model.clients[project.clientId] ?? "?") › \(project.name)") { model.start(project); model.refresh() }
                     }
                 } label: {
                     HStack { Text("Other…"); Spacer(); Image(systemName: "chevron.right").font(.caption) }
@@ -753,52 +786,108 @@ struct TrayView: View {
     }
 }
 
+/// Clients & Projects: Clients in a secondary sidebar on the left, the selected Client's details on the right.
+/// HSplitView rather than a nested NavigationSplitView: a second split view inside the outer one's detail
+/// fights it for the window toolbar and sidebar toggle; HSplitView is a plain AppKit split.
 struct ManageView: View {
-    let model: TrayModel
-    @State private var newClient = ""
-    @State private var firstProject = ""
+    @Bindable var model: TrayModel
+    @State private var creating = false
     @State private var editing: Project?
 
+    /// Open Clients first, Closed ones at the bottom; each group by name.
+    private var clients: [Client] { model.allClients.filter { $0.closedAt == nil } + model.allClients.filter { $0.closedAt != nil } }
+    private var selected: Client? { clients.first { $0.id == model.selectedClientId } ?? clients.first }
+
     var body: some View {
-        List {
-            Section("New Client") {
+        HSplitView {
+            VStack(spacing: 0) {
+                List(selection: Binding(get: { selected?.id }, set: { model.selectedClientId = $0 })) {
+                    ForEach(clients) { c in
+                        HStack(spacing: 8) {
+                            ClientIcon(client: c, color: model.clientColor(c), size: 20)
+                            Text(c.name).lineLimit(1)
+                        }
+                        .opacity(c.closedAt == nil ? 1 : 0.5)
+                        .tag(c.id)
+                    }
+                }
+                .listStyle(.sidebar)
+                Divider()
                 HStack {
-                    TextField("Client name", text: $newClient)
-                    TextField("First Project", text: $firstProject)
-                    Button("Create") {
-                        if model.createClient(newClient, firstProject: firstProject) {
-                            newClient = ""
-                            firstProject = ""
-                            model.refresh()
-                        }
-                    }
-                    .disabled(newClient.trimmingCharacters(in: .whitespaces).isEmpty
-                        || firstProject.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("New Client…", systemImage: "plus") { creating = true }
+                        .labelStyle(.iconOnly).buttonStyle(.borderless).help("New Client")
+                    Spacer()
+                }
+                .padding(6)
+            }
+            .frame(minWidth: 160, idealWidth: 200, maxWidth: 280)
+            Group {
+                if let client = selected { details(client) } else {
+                    Text("Add a Client and its first Project with +.").foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            ForEach(model.allClients) { client in
-                Section {
-                    ClientRow(model: model, client: client)
-                    ForEach(model.allProjects.filter { $0.clientId == client.id }) { p in
-                        HStack {
-                            ProjectColorMenu(color: p.color) { model.setColor(p, $0) }
-                            NameField(text: p.name) { model.renameProject(p, $0) }
-                                .opacity(model.closedIds.contains(p.id!) ? 0.5 : 1)
-                            Button("Rate & Billing…") { editing = p }
-                            Button(p.closedAt == nil ? "Close" : "Reopen") { model.setClosed(p, p.closedAt == nil) }
-                        }
-                        ProjectFoldersRow(model: model, project: p)
-                    }
-                    NameField(text: "", prompt: "Add Project") { model.addProject(client, $0) }
-                }
-            }
+            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
         .sheet(item: $editing) { p in MoneyEditor(model: model, project: p) { editing = nil } }
+        .sheet(isPresented: $creating) { NewClientSheet(model: model) { creating = false } }
+    }
+
+    private func details(_ client: Client) -> some View {
+        List {
+            Section {
+                ClientRow(model: model, client: client)
+            }
+            ForEach(model.allProjects.filter { $0.clientId == client.id }) { p in
+                Section {
+                    HStack {
+                        ClientIcon(client: client, color: p.color, size: 20)
+                        ProjectColorMenu(color: p.color) { model.setColor(p, $0) }
+                        NameField(text: p.name) { model.renameProject(p, $0) }
+                            .opacity(model.closedIds.contains(p.id!) ? 0.5 : 1)
+                        Button("Rate & Billing…") { editing = p }
+                        Button(p.closedAt == nil ? "Close" : "Reopen") { model.setClosed(p, p.closedAt == nil) }
+                    }
+                    ProjectFoldersRow(model: model, project: p)
+                }
+            }
+            Section {
+                NameField(text: "", prompt: "Add Project") { model.addProject(client, $0) }
+            }
+        }
+        .id(client.id)  // fresh field state per Client
     }
 }
 
-/// A Project's folders and addresses: a Watched App's front document inside a folder, or a Watched browser's
-/// front tab under an address, suggests this Project.
+/// The New Client form, in a sheet from the Clients list's +.
+struct NewClientSheet: View {
+    let model: TrayModel
+    let done: () -> Void
+    @State private var name = ""
+    @State private var firstProject = ""
+
+    var body: some View {
+        Form {
+            Section("New Client") {
+                TextField("Client name", text: $name)
+                TextField("First Project", text: $firstProject)
+            }
+        }
+        .formStyle(.grouped)
+        .formSheet(width: 380)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: done).keyboardShortcut(.cancelAction) }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Create") { if model.createClient(name, firstProject: firstProject) { model.refresh(); done() } }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || firstProject.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+}
+
+/// A Project's folders and Project-related websites (`ProjectAddress`): a Watched App's front document inside a
+/// folder, or a Watched browser's front tab under a website, suggests this Project.
 struct ProjectFoldersRow: View {
     let model: TrayModel
     let project: Project
@@ -816,6 +905,7 @@ struct ProjectFoldersRow: View {
         }
         Button("Add Folder…") { model.addFolder(project) }
             .buttonStyle(.link).padding(.leading, 24)
+        Text("Project-related websites").font(.caption).foregroundStyle(.secondary).padding(.leading, 24)
         ForEach(model.addresses[project.id!] ?? []) { a in
             HStack {
                 Label(a.display, systemImage: "globe")
@@ -826,7 +916,7 @@ struct ProjectFoldersRow: View {
             }
             .padding(.leading, 24)
         }
-        TextField("Add Address…", text: $address)
+        LabeledContent("Add Website…") { TextField("Add Website…", text: $address, prompt: Text("github.com/acme or a full URL")).labelsHidden() }
             .onSubmit {
                 model.addAddress(project, address)
                 if model.error == nil { address = "" }
@@ -840,6 +930,7 @@ struct ClientRow: View {
     let client: Client
     @State private var domain = ""
     var body: some View {
+        ClientIconWell(model: model, client: client)
         HStack {
             NameField(text: client.name) { model.renameClient(client, $0) }.font(.headline)
             Button(client.closedAt == nil ? "Close Client" : "Reopen Client") {

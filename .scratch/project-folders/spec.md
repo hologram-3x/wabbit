@@ -8,7 +8,7 @@ Wabbit suggests the Project you're working on from what is in front of you, not 
 - Sources of "what is in front", in order of specificity. The most specific match wins:
   1. the front window's document path (Accessibility `AXDocument`)
   2. the working folder of the shell in the front terminal window
-  3. the front browser tab's address, matched against Project addresses (ticket 03); for a Watched browser it comes before the document path
+  3. the front browser tab's address, matched against Project-related websites (ticket 03; "addresses" in code); for a Watched browser it comes before the document path
   4. existing window-title rules
   5. the Watched App's default Project
 - A match never starts tracking by itself. It feeds the existing Watched App prompt ("Track time for <App>?", Start <Project> / Not now / Not today, notification included), with the same delay and snooze rules. Only Watched Apps are read: an app not in Watched Apps is never observed (no title, document, shell or tab), so a match only refines which Project a Watched App suggests.

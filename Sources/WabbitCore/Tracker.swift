@@ -5,6 +5,8 @@ public struct Client: Codable, Equatable, Identifiable, FetchableRecord, Mutable
     public var id: Int64?
     public var name: String
     public var closedAt: Date? = nil
+    /// Custom icon: SVG text (ClientIcon.swift); nil shows the initials tile.
+    public var icon: String? = nil
     public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
 }
 
@@ -85,6 +87,7 @@ public final class Tracker {
         registerColorMigration(&m)
         m.registerMigration("v12-project-folders", migrate: migrateProjectFolders)
         m.registerMigration("v13-project-addresses", migrate: migrateProjectAddresses)
+        m.registerMigration("v14-client-icon") { try $0.alter(table: "client") { $0.add(column: "icon", .text) } }
         return m
     }
 

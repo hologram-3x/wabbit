@@ -142,8 +142,8 @@ struct WatchedAppsView: View {
             }
             let browsers = model.watchedApps.filter { BrowserAddress.isSupported($0.bundleID) || BrowserAddress.firefoxBundleIDs.contains($0.bundleID) }
             if !browsers.isEmpty {
-                Section("Browser addresses") {
-                    Text("When a Watched browser is in front and a Project has addresses (Clients & Projects), Wabbit asks the browser for the front tab's address and compares it with them. The address is never stored, logged or sent anywhere, and other apps are never asked. macOS asks once per browser whether Wabbit may do this; without it, prompts use title rules.")
+                Section("Project-related websites") {
+                    Text("When a Watched browser is in front and a Project has Project-related websites (Clients & Projects), Wabbit asks the browser for the front tab's address and compares it with them. The address is never stored, logged or sent anywhere, and other apps are never asked. macOS asks once per browser whether Wabbit may do this; without it, prompts use title rules.")
                         .font(.caption).foregroundStyle(.secondary)
                     ForEach(browsers, id: \.bundleID) { BrowserAccessRow(app: $0) }
                 }
