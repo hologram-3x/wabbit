@@ -88,6 +88,23 @@ enum Pane: Hashable, Identifiable {
     }
 }
 
+extension View {
+    /// macOS 26+: native scroll-edge effect under the toolbar. macOS 14-15: hide the toolbar band, which is wider than the content.
+    @ViewBuilder func toolbarEdge() -> some View {
+        if #available(macOS 26, *) { scrollEdgeEffectStyle(.soft, for: .top) } else { toolbarBackground(.hidden, for: .windowToolbar) }
+    }
+
+    /// A pane's primary toolbar action: prominent Liquid Glass on macOS 26+, default toolbar button before.
+    @ViewBuilder func primaryToolbarButton() -> some View {
+        if #available(macOS 26, *) { buttonStyle(.glassProminent) } else { self }
+    }
+
+    /// Editor sheets: the system form size on macOS 26+, a fixed width before.
+    @ViewBuilder func formSheet(width: CGFloat) -> some View {
+        if #available(macOS 26, *) { presentationSizing(.form) } else { frame(width: width) }
+    }
+}
+
 /// The one app window: sidebar of panes, detail on the right.
 struct MainView: View {
     @Bindable var model: TrayModel
@@ -103,8 +120,7 @@ struct MainView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
-            detail.navigationTitle(model.pane.title).errorAlert($model.error)
-                .toolbarBackground(.hidden, for: .windowToolbar)
+            detail.navigationTitle(model.pane.title).errorAlert($model.error).toolbarEdge()
         }
         .frame(minWidth: 820, minHeight: 520)
     }

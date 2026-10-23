@@ -51,13 +51,16 @@ struct SessionsView: View {
         }
         .onDeleteCommand { delete(selection) }
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem {
                 Picker("Project", selection: $filter) {
                     Text("All Projects").tag(Int64?.none)
                     ForEach(model.allProjects) { Text(model.label(forAny: $0.id!)).tag(Int64?.some($0.id!)) }
                 }
+            }
+            if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
+            ToolbarItem {
                 Button("Add Session", systemImage: "plus") { adding = true }
-                    .disabled(model.projects.isEmpty)
+                    .disabled(model.projects.isEmpty).primaryToolbarButton()
             }
         }
         .errorAlert($error)
@@ -131,7 +134,7 @@ private struct SessionEditor: View {
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
         }
         .formStyle(.grouped)
-        .frame(width: 420)
+        .formSheet(width: 420)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: done).keyboardShortcut(.cancelAction) }
             ToolbarItem(placement: .confirmationAction) {

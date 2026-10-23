@@ -47,11 +47,14 @@ struct OverviewView: View {
         } primaryAction: { ids in editing = project(ids) }
         .navigationSubtitle("\(model.amountMode == .net ? "Net" : "Gross") · Tax \(String(format: "%g", Double(model.taxBps) / 100))%")
         .toolbar {
-            ToolbarItemGroup {
-                if useRange {
+            if useRange {
+                ToolbarItemGroup {
                     DatePicker("From", selection: $from, displayedComponents: .date).labelsHidden()
                     DatePicker("To", selection: $to, displayedComponents: .date).labelsHidden()
                 }
+                if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
+            }
+            ToolbarItem {
                 Toggle(isOn: $useRange) { Label("Date Range", systemImage: "calendar") }
                     .help("Limit to a date range")
             }
@@ -128,7 +131,7 @@ struct MoneyEditor: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380)
+        .formSheet(width: 380)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: done).keyboardShortcut(.cancelAction) }
             ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.keyboardShortcut(.defaultAction) }

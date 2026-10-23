@@ -69,7 +69,7 @@ struct ExportView: View {
         .formStyle(.grouped)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Save CSV…") { save() }.keyboardShortcut(.defaultAction).disabled(!canSave)
+                Button("Save CSV…") { save() }.keyboardShortcut(.defaultAction).disabled(!canSave).primaryToolbarButton()
             }
         }
         .onAppear {
