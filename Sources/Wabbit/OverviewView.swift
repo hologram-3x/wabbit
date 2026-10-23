@@ -73,11 +73,13 @@ struct OverviewView: View {
         return rows.flatMap { $0.children ?? [] }.first { $0.id == ids.first }?.p?.project
     }
 
-    /// Closed Projects are greyed.
+    /// Client rows (no Project) are larger and taller, so each Client reads as a group; Closed Projects are greyed.
     private func cell(_ r: Row, _ text: String, trailing: Bool = false) -> some View {
         Text(text)
+            .font(r.p == nil ? .title3.weight(.semibold) : .body)
             .monospacedDigit()
             .foregroundStyle(r.p?.closed == true ? .secondary : .primary)
+            .padding(.vertical, r.p == nil ? 6 : 0)
             .frame(maxWidth: .infinity, alignment: trailing ? .trailing : .leading)
     }
 
