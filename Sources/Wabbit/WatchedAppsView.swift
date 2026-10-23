@@ -154,23 +154,27 @@ struct WatchedAppsView: View {
                 Text("When a Watched terminal is in front, the folder you're working in (herdr's focused pane, or a folder sent by a Claude Code hook in the last 5 minutes) picks the Project through Project folders. Setup: docs/developer-tools.md in the Wabbit repository.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Watched Apps") {
-                ForEach(model.watchedApps, id: \.bundleID) { app in
-                    HStack {
-                        Text(app.name)
-                        Spacer()
-                        Picker("Default Project", selection: Binding(
-                            get: { app.projectId },
-                            set: { model.setWatchedApp(app.bundleID, app.name, $0) }
-                        )) {
-                            Text("None").tag(Int64?.none)
-                            ForEach(model.projects) { p in Text(model.label(for: p.id!)).tag(Int64?.some(p.id!)) }
-                        }
-                        .labelsHidden()
-                        Button("Remove") { model.removeWatchedApp(app.bundleID) }
+            // One grouped section per app, as System Settings does, so each app's rules read as a unit.
+            ForEach(model.watchedApps, id: \.bundleID) { app in
+                Section {
+                    Picker("Default Project", selection: Binding(
+                        get: { app.projectId },
+                        set: { model.setWatchedApp(app.bundleID, app.name, $0) }
+                    )) {
+                        Text("None").tag(Int64?.none)
+                        ForEach(model.projects) { p in Text(model.label(for: p.id!)).tag(Int64?.some(p.id!)) }
                     }
                     TitleRulesEditor(model: model, app: app)
+                } header: {
+                    HStack {
+                        Text(app.name).font(.headline)
+                        Spacer()
+                        Button("Remove", role: .destructive) { model.removeWatchedApp(app.bundleID) }
+                            .buttonStyle(.borderless).font(.callout)
+                    }
                 }
+            }
+            Section(model.watchedApps.isEmpty ? "Watched Apps" : "") {
                 Menu("Add app…") {
                     ForEach(installed.filter { app in !model.watchedApps.contains { $0.bundleID == app.bundleID } },
                             id: \.bundleID) { app in

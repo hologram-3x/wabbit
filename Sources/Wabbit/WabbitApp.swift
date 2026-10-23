@@ -867,6 +867,11 @@ struct ManageView: View {
                             .opacity(model.closedIds.contains(p.id!) ? 0.5 : 1)
                         Button("Rate & Billing…") { editing = p }
                         Button(p.closedAt == nil ? "Close" : "Reopen") { model.setClosed(p, p.closedAt == nil) }
+                        InfoButton("""
+                            The dot sets the Project's colour, shown in Overview, Sessions and the tray.
+                            Rate & Billing: the hourly Rate, and whether it's billed Hourly or for a Fixed price with estimated hours.
+                            Close: archive the Project. Its time stays in reports, but it can't be tracked and leaves the tray.
+                            """)
                     }
                     ProjectFoldersRow(model: model, project: p)
                 }
@@ -908,11 +913,33 @@ struct NewClientSheet: View {
 
 /// A Project's folders and Project-related websites (`ProjectAddress`): a Watched App's front document inside a
 /// folder, or a Watched browser's front tab under a website, suggests this Project.
+/// A small ⓘ that shows a short explanation in a popover.
+struct InfoButton: View {
+    let text: String
+    @State private var shown = false
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Button { shown.toggle() } label: { Image(systemName: "info.circle") }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help("What is this?")
+            .accessibilityLabel("Info")
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                Text(text).font(.callout).frame(width: 280, alignment: .leading).fixedSize(horizontal: false, vertical: true).padding(12)
+            }
+    }
+}
+
 struct ProjectFoldersRow: View {
     let model: TrayModel
     let project: Project
     @State private var address = ""
     var body: some View {
+        HStack(spacing: 4) {
+            Text("Project folders").font(.caption).foregroundStyle(.secondary)
+            InfoButton("When a Watched App has a file from one of these folders in front (or a Watched terminal is in one), Wabbit suggests this Project. Subfolders count; the deepest match wins.")
+        }
+        .padding(.leading, 24)
         ForEach(model.folders[project.id!] ?? []) { f in
             HStack {
                 Label((f.path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
@@ -925,7 +952,11 @@ struct ProjectFoldersRow: View {
         }
         Button("Add Folder…") { model.addFolder(project) }
             .buttonStyle(.link).padding(.leading, 24)
-        Text("Project-related websites").font(.caption).foregroundStyle(.secondary).padding(.leading, 24)
+        HStack(spacing: 4) {
+            Text("Project-related websites").font(.caption).foregroundStyle(.secondary)
+            InfoButton("When a Watched browser (Safari or a Chrome-based one, after you allow it in Watched Apps) shows a page on one of these sites, Wabbit suggests this Project. Paths match whole segments; the longest match wins. Firefox can't report its address.")
+        }
+        .padding(.leading, 24)
         ForEach(model.addresses[project.id!] ?? []) { a in
             HStack {
                 Label(a.display, systemImage: "globe")
