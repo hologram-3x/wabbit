@@ -6,7 +6,8 @@ on:
 
 jobs:
   test:
-    runs-on: macos-26
+    # Same macOS and Xcode as local development (Xcode 27, preview image); release stays on macos-26 below.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - run: swift test
