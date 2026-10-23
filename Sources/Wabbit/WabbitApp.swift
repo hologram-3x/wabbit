@@ -693,7 +693,7 @@ struct TrayView: View {
         HStack {
             footerButton("plus", "New Client or Project") { open(.clients) }
             Spacer()
-            footerButton("gearshape", "Open Wabbit") { open(nil) }.keyboardShortcut(",")
+            footerButton("hare", "Open Wabbit") { open(nil) }.keyboardShortcut(",")
             Spacer()
             footerButton("power", "Quit Wabbit") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
         }
