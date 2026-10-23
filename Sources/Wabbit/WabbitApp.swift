@@ -787,6 +787,28 @@ struct TrayView: View {
 }
 
 /// Clients & Projects: Clients in a secondary sidebar on the left, the selected Client's details on the right.
+/// A Client in the Clients list: icon, name, Project count; hover highlight (selection is the list's own).
+private struct ClientListRow: View {
+    let client: Client
+    let color: ProjectColor
+    let projects: Int
+    @State private var hovering = false
+    var body: some View {
+        HStack(spacing: 10) {
+            ClientIcon(client: client, color: color, size: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(client.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                Text(projects == 1 ? "1 Project" : "\(projects) Projects").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .opacity(client.closedAt == nil ? 1 : 0.5)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .listRowBackground(RoundedRectangle(cornerRadius: 6).fill(hovering ? Color.primary.opacity(0.06) : .clear).padding(.horizontal, 6))
+    }
+}
+
 /// HSplitView rather than a nested NavigationSplitView: a second split view inside the outer one's detail
 /// fights it for the window toolbar and sidebar toggle; HSplitView is a plain AppKit split.
 struct ManageView: View {
@@ -801,17 +823,15 @@ struct ManageView: View {
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
+                // Tags must be the non-optional id: an `Int64?` tag never matches the selection, so clicks did nothing.
                 List(selection: Binding(get: { selected?.id }, set: { model.selectedClientId = $0 })) {
                     ForEach(clients) { c in
-                        HStack(spacing: 8) {
-                            ClientIcon(client: c, color: model.clientColor(c), size: 20)
-                            Text(c.name).lineLimit(1)
-                        }
-                        .opacity(c.closedAt == nil ? 1 : 0.5)
-                        .tag(c.id)
+                        ClientListRow(client: c, color: model.clientColor(c),
+                                      projects: model.allProjects.filter { $0.clientId == c.id }.count)
+                            .tag(c.id!)
                     }
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset)
                 Divider()
                 HStack {
                     Button("New Client…", systemImage: "plus") { creating = true }
@@ -820,7 +840,7 @@ struct ManageView: View {
                 }
                 .padding(6)
             }
-            .frame(minWidth: 160, idealWidth: 200, maxWidth: 280)
+            .frame(minWidth: 150, idealWidth: 180, maxWidth: 220)
             Group {
                 if let client = selected { details(client) } else {
                     Text("Add a Client and its first Project with +.").foregroundStyle(.secondary)
