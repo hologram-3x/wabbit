@@ -48,6 +48,7 @@ The tag (without `v`) becomes `CFBundleShortVersionString`; the workflow run num
 ## v1.0 (needs a human)
 
 1. Get a paid Apple Developer account, export the Developer ID Application certificate and add the secrets above; do the Sparkle keys step.
+   Then set the repository variable `RELEASE_ENABLED` to `true` (`gh variable set RELEASE_ENABLED --body true`): until then the `release` job is skipped, so plain version tags only mark the version.
 2. `git tag v1.0.0 && git push origin v1.0.0`, wait for the `release` job: it notarizes, writes `appcast.xml` and creates the `v1.0.0` Release.
 3. On a clean Mac (or a new user account): download `Wabbit.dmg` from the Release, drag Wabbit to Applications, open it. Gatekeeper must not complain; the rabbit appears in the menu bar; Launch at login is on.
 4. Updates: tag `v1.0.1` the same way, then in the installed v1.0.0 choose **Check for Updates…**. Sparkle must offer 1.0.1, install it and relaunch.
