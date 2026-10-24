@@ -9,9 +9,13 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-# ponytail: host arch only (arm64 on CI); add `--arch arm64 --arch x86_64` if Intel Macs matter.
-swift build -c release --product Wabbit
-BIN=$(swift build -c release --show-bin-path)
+# ponytail: arm64 only; add `--arch x86_64` to BUILD if Intel Macs matter.
+# Xcode's build system with an explicit SDK: SwiftPM's default backend stamps the deployment target (14.0)
+# as the SDK version, which makes macOS run Wabbit in compatibility mode with the old look. This records
+# the real SDK (e.g. 27.0), so macOS 26+ gives it the current design.
+BUILD="--build-system xcode -c release --product Wabbit --arch arm64 --sdk $(xcrun --sdk macosx --show-sdk-path)"
+swift build $BUILD
+BIN=$(swift build $BUILD --show-bin-path)
 
 APP=build/Wabbit.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
