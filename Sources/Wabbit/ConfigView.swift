@@ -110,6 +110,7 @@ struct ConfigView: View {
             model.error = "Default Rate must be an amount like 50 or 50,50"; return
         }
         model.setDefaultRateCents(MoneyEditor.cents(trimmed))
+        model.error = nil
         load()
     }
 
@@ -118,6 +119,7 @@ struct ConfigView: View {
             model.error = "Tax Rate must be 0 to under 100"; return
         }
         model.setTaxRateBps(bps)
+        model.error = nil
         load()
     }
 }

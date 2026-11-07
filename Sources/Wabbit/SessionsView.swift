@@ -104,7 +104,9 @@ struct SessionsView: View {
         return "\(error)"
     }
 
-    private func load() { sessions = (try? model.tracker.allSessions()) ?? [] }
+    private func load() {
+        do { sessions = try model.tracker.allSessions() } catch { self.error = "Couldn't load Sessions: \(error)" }
+    }
 }
 
 /// Edits a Session, or adds a Manual one when `session` is nil (defaults to yesterday 09:00-11:00).
