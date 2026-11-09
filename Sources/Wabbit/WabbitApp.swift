@@ -984,7 +984,6 @@ struct ClientRow: View {
     let model: TrayModel
     let client: Client
     @State private var domain = ""
-    @State private var confirmDelete = false
     var body: some View {
         ClientIconWell(model: model, client: client)
         HStack {
@@ -992,12 +991,11 @@ struct ClientRow: View {
             Button(client.closedAt == nil ? "Close Client" : "Reopen Client") {
                 model.setClosed(client, client.closedAt == nil)
             }
-            Button("Delete Client…", role: .destructive) { confirmDelete = true }
-                .confirmationDialog("Delete \(client.name)?", isPresented: $confirmDelete) {
-                    Button("Delete Client", role: .destructive) { model.removeClient(client) }
-                } message: {
-                    Text("Its Projects and all their Sessions are deleted too. This can't be undone. To keep the time in reports, Close the Client instead.")
-                }
+            // Only a Closed Client can be deleted, so it takes two deliberate steps.
+            if client.closedAt != nil {
+                Button("Delete Client…", role: .destructive) { confirmDelete() }
+                    .buttonStyle(.borderedProminent).tint(.red)
+            }
         }
         HStack {
             ForEach(model.domains[client.id!] ?? [], id: \.self) { d in
@@ -1007,6 +1005,16 @@ struct ClientRow: View {
                 model.addDomain(client, domain); domain = ""
             }
         }
+    }
+
+    private func confirmDelete() {
+        let alert = NSAlert()
+        alert.messageText = "Delete \(client.name)?"
+        alert.informativeText = "Its Projects and all their Sessions are deleted too. This can't be undone."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "Delete").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { model.removeClient(client) }
     }
 }
 
