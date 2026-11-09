@@ -384,6 +384,10 @@ final class TrayModel {
     func setClosed(_ c: Client, _ closed: Bool) {
         act { closed ? try tracker.closeClient(id: c.id!) : try tracker.reopenClient(id: c.id!) }
     }
+    func removeClient(_ c: Client) {
+        act { try tracker.removeClient(id: c.id!) }
+        if selectedClientId == c.id { selectedClientId = nil }
+    }
     func addDomain(_ c: Client, _ d: String) { act { try tracker.addDomain(clientId: c.id!, d) } }
     func removeDomain(_ c: Client, _ d: String) { act { try tracker.removeDomain(clientId: c.id!, d) } }
     func removeFolder(_ f: ProjectFolder) { act { try tracker.removeProjectFolder(id: f.id!) } }
@@ -980,6 +984,7 @@ struct ClientRow: View {
     let model: TrayModel
     let client: Client
     @State private var domain = ""
+    @State private var confirmDelete = false
     var body: some View {
         ClientIconWell(model: model, client: client)
         HStack {
@@ -987,6 +992,12 @@ struct ClientRow: View {
             Button(client.closedAt == nil ? "Close Client" : "Reopen Client") {
                 model.setClosed(client, client.closedAt == nil)
             }
+            Button("Delete Client…", role: .destructive) { confirmDelete = true }
+                .confirmationDialog("Delete \(client.name)?", isPresented: $confirmDelete) {
+                    Button("Delete Client", role: .destructive) { model.removeClient(client) }
+                } message: {
+                    Text("Its Projects and all their Sessions are deleted too. This can't be undone. To keep the time in reports, Close the Client instead.")
+                }
         }
         HStack {
             ForEach(model.domains[client.id!] ?? [], id: \.self) { d in

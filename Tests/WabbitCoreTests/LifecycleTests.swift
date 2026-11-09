@@ -104,3 +104,15 @@ import WabbitCore
     try h.tracker.setColor(projectId: p.id!, .purple)
     #expect(try h.tracker.projects().first?.color == .purple)
 }
+
+@Test func removeClientDeletesItsProjectsAndSessions() throws {
+    let h = try Harness()
+    let (c, p) = try h.tracker.createClient(name: "ACME", firstProject: "Web")
+    let (_, keep) = try h.tracker.createClient(name: "Other", firstProject: "App")
+    try h.tracker.start(projectId: p.id!)
+    try h.tracker.removeClient(id: c.id!)
+    #expect(try h.tracker.clients().map(\.name) == ["Other"])
+    #expect(try h.tracker.projects().map(\.id) == [keep.id])
+    #expect(try h.tracker.allSessions().isEmpty)
+    #expect(throws: WabbitError.notFound) { try h.tracker.removeClient(id: c.id!) }
+}

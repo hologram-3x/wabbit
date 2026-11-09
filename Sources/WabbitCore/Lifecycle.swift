@@ -73,6 +73,13 @@ extension Tracker {
         try db.write { try $0.execute(sql: "UPDATE client SET closedAt = NULL WHERE id = ?", arguments: [id]) }
     }
 
+    /// Deletes the Client with all its Projects and Sessions (cascade). Not undoable: the UI confirms first.
+    public func removeClient(id: Int64) throws {
+        try db.write { db in
+            guard try Client.deleteOne(db, key: id) else { throw WabbitError.notFound }
+        }
+    }
+
     /// Adds a Project to an existing Client.
     @discardableResult
     public func addProject(clientId: Int64, name: String) throws -> Project {
