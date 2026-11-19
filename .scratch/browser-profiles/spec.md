@@ -13,7 +13,7 @@ A Browser Profile (e.g. Helium "OpenCom") can be assigned to a Client, so a brow
 ## Detection (spike, 2026-11-19)
 
 - Chromium: the focused window's AX title (`kAXTitleAttribute`, already read by `WindowTitleWatcher`) ends with ` - <Profile name>` when the browser has more than one profile: `Example Domain - Helium - Kipo`. AppleScript `name`/`title` does NOT include it. Match the title's end against `" - " + name` for each known profile name; don't split on " - " (page titles contain dashes). Verified switching Nic → Kipo → Nic windows. Cross-check signal: toolbar avatar `AXButton` whose title/description is the profile name (position varies; find by name).
-- Profile names: `~/Library/Application Support/<vendor dir>/Local State` → `profile.info_cache` (`{"Default": {"name": "Nic"}, "Profile 1": {"name": "OpenCom"}, …}`). Helium dir: `net.imput.helium`; Chrome: `Google/Chrome`. Re-read when the profile list is shown and when matching misses.
+- Profile names: `~/Library/Application Support/<vendor dir>/Local State` → `profile.info_cache` (`{"Default": {"name": "Nic"}, "Profile 1": {"name": "OpenCom"}, …}`). Helium dir: `net.imput.helium`; Chrome: `Google/Chrome`. Re-read when the browser comes to the front, when the profile list is shown, and when `Local State` changes (its folder is watched while the browser is a Watched App; bursts coalesce into one read 1 s after the last write).
 - Single-profile browsers show no suffix; nothing to assign then.
 - Spike scripts (temporary): `axdump.swift`, `profileprobe.swift` in the session scratchpad.
 

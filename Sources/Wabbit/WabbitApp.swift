@@ -194,6 +194,9 @@ final class TrayModel {
     private(set) var titleRules: [String: [TitleRule]] = [:]
     /// Assigned Browser Profiles per Watched browser: folder → Client id.
     private(set) var browserProfiles: [String: [String: Int64]] = [:]
+    /// Bumped when a Watched browser's `Local State` changes, so the Watched Apps editor re-reads its profiles.
+    private(set) var profileNamesVersion = 0
+    private var profilesWatcher: ChromiumProfilesWatcher?
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
@@ -246,6 +249,13 @@ final class TrayModel {
         }, signalsOn: { [weak self] in self?.folderSignals == true },
            addressesOn: { [weak self] in self?.hasOpenAddresses == true },
            profileNames: { [weak self] in self?.tracker.setBrowserProfileNames(bundleID: $0, $1) }) { [weak self] in self?.scheduleWatchedCheck() }
+        profilesWatcher = ChromiumProfilesWatcher { [weak self] id, names in
+            guard let self else { return }
+            tracker.setBrowserProfileNames(bundleID: id, names)
+            profileNamesVersion += 1
+            scheduleWatchedCheck()
+        }
+        profilesWatcher?.watch(Set(watchedApps.map(\.bundleID)))
         scheduleWatchedCheck()
         updateSignalSocket()
         NotificationCenter.default.addObserver(
@@ -356,6 +366,7 @@ final class TrayModel {
             workingHours = tracker.workingHours()
             titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
             browserProfiles = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.browserProfiles(bundleID: $0.bundleID)) })
+            profilesWatcher?.watch(Set(watchedApps.map(\.bundleID)))
             amountMode = try tracker.amountMode()
             taxBps = try tracker.taxRateBps()
             defaultRateCents = try tracker.defaultRateCents()

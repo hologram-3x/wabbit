@@ -243,7 +243,7 @@ struct BrowserAccessRow: View {
 }
 
 /// A Watched Chromium browser's profiles, each with a Client: while it's in front, prompts suggest only that
-/// Client's Projects. Names are re-read from the browser's `Local State` each time the list is shown.
+/// Client's Projects. Names are re-read from the browser's `Local State` each time the list is shown and when it changes.
 struct BrowserProfilesEditor: View {
     let model: TrayModel
     let app: WatchedApp
@@ -278,7 +278,7 @@ struct BrowserProfilesEditor: View {
                 }
             }
         }
-        .task {
+        .task(id: model.profileNamesVersion) {
             let read = ChromiumProfiles.names(app.bundleID)
             names = read ?? [:]
             if read == nil { unreadable.insert(app.bundleID) } else { unreadable.remove(app.bundleID) }
