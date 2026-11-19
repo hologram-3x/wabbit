@@ -10,7 +10,7 @@ enum BrowserAddress {
     private static let scripts: [String: String] = {
         var s = ["com.apple.Safari": "URL of current tab of front window"]
         for id in ["com.google.Chrome", "com.brave.Browser", "com.microsoft.edgemac", "company.thebrowser.Browser",
-                   "com.vivaldi.Vivaldi"] { s[id] = "URL of active tab of front window" }
+                   "com.vivaldi.Vivaldi", "net.imput.helium"] { s[id] = "URL of active tab of front window" }
         return s
     }()
     static let firefoxBundleIDs: Set<String> = ["org.mozilla.firefox", "org.mozilla.firefoxdeveloperedition", "org.mozilla.nightly"]

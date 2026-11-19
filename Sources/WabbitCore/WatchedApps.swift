@@ -34,6 +34,8 @@ final class WatchedAppRuntime {
     var signal: (path: String, at: Date)?
     /// Front browser tab's address (normalised), from `.browserAddress`; cleared when the app changes.
     var address: (host: String, path: String)?
+    /// Browser Profile names per browser (folder → name), supplied by the shell; see BrowserProfiles.swift.
+    var profileNames: [String: [String: String]] = [:]
     var since = Date.distantPast
     /// "Not now": per app, for `notNowDuration`.
     var notNowUntil: [String: Date] = [:]
@@ -110,11 +112,18 @@ extension Tracker {
               (w.notToday[id] ?? .distantPast) <= now,
               let app = try? db.read({ try WatchedApp.fetchOne($0, key: id) })
         else { return nil }
+        // An assigned Browser Profile in front restricts every step to its Client, whose last used Project
+        // replaces the default; a browser with assignments gives no prompt for any other profile.
+        let client = profileClient(bundleID: id, title: w.title)
+        if case .some(nil) = client { return nil }
+        let clientId = client ?? nil
         // Fresh folder signal (terminals only), then browser address, then document folder, then title rules,
         // then the default; a Closed Project is no suggestion.
-        let matched = freshFolderSignal(frontApp: id).flatMap(projectForNormalised)
-            ?? w.address.flatMap(projectForNormalisedAddress)
-            ?? w.document.flatMap(projectForNormalised) ?? resolveProject(for: app, title: w.title)
+        let matched = freshFolderSignal(frontApp: id).flatMap { projectForNormalised($0, clientId: clientId) }
+            ?? w.address.flatMap { projectForNormalisedAddress($0, clientId: clientId) }
+            ?? w.document.flatMap { projectForNormalised($0, clientId: clientId) }
+            ?? resolveProject(for: app, title: w.title, clientId: clientId)
+            ?? clientId.flatMap(lastUsedProject)
         let runningId = (try? runningSession())?.projectId
         if let matched {
             guard runningId != matched else { return nil }

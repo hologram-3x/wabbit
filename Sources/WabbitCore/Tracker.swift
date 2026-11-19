@@ -88,6 +88,7 @@ public final class Tracker {
         m.registerMigration("v12-project-folders", migrate: migrateProjectFolders)
         m.registerMigration("v13-project-addresses", migrate: migrateProjectAddresses)
         m.registerMigration("v14-client-icon") { try $0.alter(table: "client") { $0.add(column: "icon", .text) } }
+        m.registerMigration("v15-browser-profiles", migrate: migrateBrowserProfiles)
         return m
     }
 

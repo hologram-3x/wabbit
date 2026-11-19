@@ -70,16 +70,18 @@ extension Tracker {
 
     /// The Open Project whose address is the longest prefix of `url`.
     public func projectForAddress(url: String) -> Int64? {
-        Self.normalisedAddress(url).flatMap(projectForNormalisedAddress)
+        Self.normalisedAddress(url).flatMap { projectForNormalisedAddress($0) }
     }
 
-    func projectForNormalisedAddress(_ a: (host: String, path: String)) -> Int64? {
+    /// `clientId`: only that Client's Projects (an assigned Browser Profile in front).
+    func projectForNormalisedAddress(_ a: (host: String, path: String), clientId: Int64? = nil) -> Int64? {
         let rows = (try? db.read { try Row.fetchAll($0, sql: """
-            SELECT a.projectId, a.path FROM projectAddress a
+            SELECT a.projectId, a.path, p.clientId FROM projectAddress a
             JOIN project p ON p.id = a.projectId JOIN client c ON c.id = p.clientId
             WHERE a.host = ? AND p.closedAt IS NULL AND c.closedAt IS NULL
             """, arguments: [a.host]) }) ?? []
         return rows
+            .filter { clientId == nil || $0["clientId"] == clientId }
             .map { (id: $0["projectId"] as Int64, path: $0["path"] as String) }
             .filter { a.path == $0.path || a.path.hasPrefix($0.path + "/") }
             .max { $0.path.count < $1.path.count }?.id

@@ -6,6 +6,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] Helium appears with the Browser addresses permission row in Watched Apps
-- [ ] With permission, a Project address matches a Helium tab and the prompt suggests that Project
+- [x] Helium appears with the Browser addresses permission row in Watched Apps
+- [x] With permission, a Project address matches a Helium tab and the prompt suggests that Project
 - [ ] Needs a human: allow Helium, open a Project's address, check the prompt

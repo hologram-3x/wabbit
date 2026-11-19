@@ -192,6 +192,8 @@ final class TrayModel {
     private(set) var workingHours = WorkingHours()
     private var signalSocket: FolderSignalSocket?
     private(set) var titleRules: [String: [TitleRule]] = [:]
+    /// Assigned Browser Profiles per Watched browser: folder → Client id.
+    private(set) var browserProfiles: [String: [String: Int64]] = [:]
     /// Idle Session left by Split, awaiting assign or drop.
     private(set) var splitIdleSession: Session?
     var error: String?
@@ -242,7 +244,8 @@ final class TrayModel {
         activeApp = ActiveAppObserver(feed: feed, isWatched: { [weak self] id in
             self?.watchedApps.contains { $0.bundleID == id } == true
         }, signalsOn: { [weak self] in self?.folderSignals == true },
-           addressesOn: { [weak self] in self?.hasOpenAddresses == true }) { [weak self] in self?.scheduleWatchedCheck() }
+           addressesOn: { [weak self] in self?.hasOpenAddresses == true },
+           profileNames: { [weak self] in self?.tracker.setBrowserProfileNames(bundleID: $0, $1) }) { [weak self] in self?.scheduleWatchedCheck() }
         scheduleWatchedCheck()
         updateSignalSocket()
         NotificationCenter.default.addObserver(
@@ -352,6 +355,7 @@ final class TrayModel {
             folderSignals = try tracker.folderSignalsEnabled()
             workingHours = tracker.workingHours()
             titleRules = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.titleRules(bundleID: $0.bundleID)) })
+            browserProfiles = Dictionary(uniqueKeysWithValues: try watchedApps.map { ($0.bundleID, try tracker.browserProfiles(bundleID: $0.bundleID)) })
             amountMode = try tracker.amountMode()
             taxBps = try tracker.taxRateBps()
             defaultRateCents = try tracker.defaultRateCents()

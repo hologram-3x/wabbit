@@ -17,14 +17,18 @@ final class ActiveAppObserver {
     private let signalsOn: @MainActor () -> Bool
     /// True when some Open Project has an address: only then is a Watched browser asked for its tab.
     private let addressesOn: @MainActor () -> Bool
+    /// Hands a Watched Chromium browser's profile names to the core, re-read each time it comes to the front.
+    private let profileNames: @MainActor (String, [String: String]) -> Void
     /// pid + title herdr was last read for: re-read only when they change (herdr retitles on pane focus).
     private var herdrKey: String?
     private var herdrBusy = false, herdrAgain: pid_t?
     private var addressBusy = false, addressAgain: String?
 
     init(feed: AppDetectionFeed, isWatched: @escaping @MainActor (String) -> Bool, signalsOn: @escaping @MainActor () -> Bool,
-         addressesOn: @escaping @MainActor () -> Bool, onChange: @escaping @MainActor () -> Void) {
+         addressesOn: @escaping @MainActor () -> Bool, profileNames: @escaping @MainActor (String, [String: String]) -> Void,
+         onChange: @escaping @MainActor () -> Void) {
         self.feed = feed
+        self.profileNames = profileNames
         self.isWatched = isWatched
         self.signalsOn = signalsOn
         self.addressesOn = addressesOn
@@ -50,6 +54,7 @@ final class ActiveAppObserver {
             return onChange()
         }
         herdrKey = nil
+        if let names = ChromiumProfiles.names(id) { profileNames(id, names) }
         let pid = app.processIdentifier
         titles.watch(pid: pid) { [weak self] title, doc in
             guard let self else { return }
@@ -166,6 +171,7 @@ struct WatchedAppsView: View {
                         Text("None").tag(Int64?.none)
                         ForEach(model.projects) { p in Text(model.label(for: p.id!)).tag(Int64?.some(p.id!)) }
                     }
+                    if ChromiumProfiles.isSupported(app.bundleID) { BrowserProfilesEditor(model: model, app: app) }
                     TitleRulesEditor(model: model, app: app)
                 } header: {
                     HStack {
@@ -223,6 +229,43 @@ struct BrowserAccessRow: View {
     private func check(ask: Bool) {
         let id = app.bundleID
         Task { access = await Task.detached { BrowserAddress.access(id, ask: ask) }.value }
+    }
+}
+
+/// A Watched Chromium browser's profiles, each with a Client: while it's in front, prompts suggest only that
+/// Client's Projects. Names are re-read from the browser's `Local State` each time the list is shown.
+struct BrowserProfilesEditor: View {
+    let model: TrayModel
+    let app: WatchedApp
+    @State private var names: [String: String] = [:]
+
+    var body: some View {
+        let assigned = model.browserProfiles[app.bundleID] ?? [:]
+        // Assigned folders the browser no longer lists stay visible, so they can be cleared.
+        let folders = Set(names.keys).union(assigned.keys).sorted { (names[$0] ?? $0).localizedStandardCompare(names[$1] ?? $1) == .orderedAscending }
+        DisclosureGroup("Browser profiles (\(assigned.count) assigned)") {
+            if names.count < 2 && assigned.isEmpty {
+                Text("Only one profile: nothing to assign.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("While a profile assigned to a Client is in front, prompts suggest only that Client's Open Projects. Once one profile is assigned, the other profiles give no prompt. Needs Accessibility (the profile is read from the window title).")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(folders, id: \.self) { folder in
+                    Picker(names[folder] ?? folder, selection: Binding(
+                        get: { assigned[folder] },
+                        set: { model.setBrowserProfileClient(app.bundleID, folder, $0) }
+                    )) {
+                        Text("None").tag(Int64?.none)
+                        ForEach(model.allClients.filter { $0.closedAt == nil || $0.id == assigned[folder] }) { c in
+                            Text(c.closedAt == nil ? c.name : "\(c.name) (Closed)").tag(Int64?.some(c.id!))
+                        }
+                    }
+                }
+            }
+        }
+        .task {
+            names = ChromiumProfiles.names(app.bundleID) ?? [:]
+            model.tracker.setBrowserProfileNames(bundleID: app.bundleID, names)
+        }
     }
 }
 
@@ -319,6 +362,10 @@ extension TrayModel {
         act { try tracker.addTitleRule(bundleID: id, kind: kind, text: text, projectId: projectId) }
     }
     func removeTitleRule(_ id: Int64) { act { try tracker.removeTitleRule(id: id) } }
+    func setBrowserProfileClient(_ id: String, _ folder: String, _ clientId: Int64?) {
+        act { try tracker.setBrowserProfileClient(bundleID: id, folder: folder, clientId: clientId) }
+        scheduleWatchedCheck()
+    }
     func moveTitleRule(_ bundleID: String, _ rules: [TitleRule], from i: Int, by d: Int) {
         var ids = rules.compactMap(\.id)
         ids.swapAt(i, i + d)

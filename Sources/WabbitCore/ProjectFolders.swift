@@ -59,14 +59,15 @@ extension Tracker {
         projectForNormalised(Self.normalisedPath(path).lowercased())
     }
 
-    /// `path` already normalised and lowercased.
-    func projectForNormalised(_ path: String) -> Int64? {
+    /// `path` already normalised and lowercased. `clientId`: only that Client's Projects.
+    func projectForNormalised(_ path: String, clientId: Int64? = nil) -> Int64? {
         let rows = (try? db.read { try Row.fetchAll($0, sql: """
-            SELECT f.projectId, f.path FROM projectFolder f
+            SELECT f.projectId, f.path, p.clientId FROM projectFolder f
             JOIN project p ON p.id = f.projectId JOIN client c ON c.id = p.clientId
             WHERE p.closedAt IS NULL AND c.closedAt IS NULL
             """) }) ?? []
         return rows
+            .filter { clientId == nil || $0["clientId"] == clientId }
             .map { (id: $0["projectId"] as Int64, dir: ($0["path"] as String).lowercased()) }
             .filter { path == $0.dir || path.hasPrefix($0.dir.hasSuffix("/") ? $0.dir : $0.dir + "/") }
             .max { $0.dir.count < $1.dir.count }?.id

@@ -74,9 +74,14 @@ extension Tracker {
 
     /// First rule (in order) matching `title` whose Project is Open, else the app's default Project.
     /// A nil title (no Accessibility permission, no window) skips the rules.
-    func resolveProject(for app: WatchedApp, title: String?) -> Int64? {
+    /// `clientId` (an assigned Browser Profile in front): only that Client's Projects, and no default.
+    func resolveProject(for app: WatchedApp, title: String?, clientId: Int64? = nil) -> Int64? {
         let rules = title == nil ? [] : ((try? titleRules(bundleID: app.bundleID)) ?? [])
-        let candidates = rules.filter { $0.matches(title!) }.map(\.projectId) + [app.projectId].compactMap { $0 }
-        return candidates.first { pid in (try? db.read { try Project.fetchOne($0, key: pid) }).flatMap { try? isClosed($0) } == false }
+        let fallback = clientId == nil ? [app.projectId].compactMap { $0 } : []
+        let candidates = rules.filter { $0.matches(title!) }.map(\.projectId) + fallback
+        return candidates.first { pid in
+            (try? db.read { try Project.fetchOne($0, key: pid) })
+                .flatMap { p in clientId == nil || p.clientId == clientId ? try? !isClosed(p) : nil } == true
+        }
     }
 }
