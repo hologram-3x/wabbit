@@ -18,14 +18,14 @@ final class ActiveAppObserver {
     /// True when some Open Project has an address: only then is a Watched browser asked for its tab.
     private let addressesOn: @MainActor () -> Bool
     /// Hands a Watched Chromium browser's profile names to the core, re-read each time it comes to the front.
-    private let profileNames: @MainActor (String, [String: String]) -> Void
+    private let profileNames: @MainActor (String, [String: String]?) -> Void
     /// pid + title herdr was last read for: re-read only when they change (herdr retitles on pane focus).
     private var herdrKey: String?
     private var herdrBusy = false, herdrAgain: pid_t?
     private var addressBusy = false, addressAgain: String?
 
     init(feed: AppDetectionFeed, isWatched: @escaping @MainActor (String) -> Bool, signalsOn: @escaping @MainActor () -> Bool,
-         addressesOn: @escaping @MainActor () -> Bool, profileNames: @escaping @MainActor (String, [String: String]) -> Void,
+         addressesOn: @escaping @MainActor () -> Bool, profileNames: @escaping @MainActor (String, [String: String]?) -> Void,
          onChange: @escaping @MainActor () -> Void) {
         self.feed = feed
         self.profileNames = profileNames
@@ -54,7 +54,7 @@ final class ActiveAppObserver {
             return onChange()
         }
         herdrKey = nil
-        if let names = ChromiumProfiles.names(id) { profileNames(id, names) }
+        profileNames(id, ChromiumProfiles.names(id))
         let pid = app.processIdentifier
         titles.watch(pid: pid) { [weak self] title, doc in
             guard let self else { return }
@@ -135,6 +135,7 @@ struct InstalledApp: Hashable {
 struct WatchedAppsView: View {
     let model: TrayModel
     @State private var installed: [InstalledApp] = []
+    @State private var unreadableProfiles: Set<String> = []
 
     var body: some View {
         Form {
@@ -163,6 +164,9 @@ struct WatchedAppsView: View {
             }
             // One grouped section per app, as System Settings does, so each app's rules read as a unit.
             ForEach(model.watchedApps, id: \.bundleID) { app in
+                // With readable profile names, assigned profiles pick the Project and the default never applies.
+                let profilesDecide = !(model.browserProfiles[app.bundleID] ?? [:]).isEmpty
+                    && !unreadableProfiles.contains(app.bundleID)
                 Section {
                     Picker("Default Project", selection: Binding(
                         get: { app.projectId },
@@ -171,7 +175,13 @@ struct WatchedAppsView: View {
                         Text("None").tag(Int64?.none)
                         ForEach(model.projects) { p in Text(model.label(for: p.id!)).tag(Int64?.some(p.id!)) }
                     }
-                    if ChromiumProfiles.isSupported(app.bundleID) { BrowserProfilesEditor(model: model, app: app) }
+                    .disabled(profilesDecide)
+                    if profilesDecide {
+                        Text("Not used: the assigned profiles decide the Project.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if ChromiumProfiles.isSupported(app.bundleID) {
+                        BrowserProfilesEditor(model: model, app: app, unreadable: $unreadableProfiles)
+                    }
                     TitleRulesEditor(model: model, app: app)
                 } header: {
                     HStack {
@@ -237,6 +247,8 @@ struct BrowserAccessRow: View {
 struct BrowserProfilesEditor: View {
     let model: TrayModel
     let app: WatchedApp
+    /// Browsers whose profile names can't be read; shared with the default Project picker.
+    @Binding var unreadable: Set<String>
     @State private var names: [String: String] = [:]
 
     var body: some View {
@@ -244,9 +256,13 @@ struct BrowserProfilesEditor: View {
         // Assigned folders the browser no longer lists stay visible, so they can be cleared.
         let folders = Set(names.keys).union(assigned.keys).sorted { (names[$0] ?? $0).localizedStandardCompare(names[$1] ?? $1) == .orderedAscending }
         DisclosureGroup("Browser profiles (\(assigned.count) assigned)") {
-            if names.count < 2 && assigned.isEmpty {
+            if unreadable.contains(app.bundleID) {
+                Text("Can't read this browser's profiles: profiles are ignored until it can.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if names.count < 2 && assigned.isEmpty {
                 Text("Only one profile: nothing to assign.").font(.caption).foregroundStyle(.secondary)
-            } else {
+            }
+            if names.count >= 2 || !assigned.isEmpty {
                 Text("While a profile assigned to a Client is in front, prompts suggest only that Client's Open Projects. Once one profile is assigned, the other profiles give no prompt. Needs Accessibility (the profile is read from the window title).")
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(folders, id: \.self) { folder in
@@ -263,8 +279,10 @@ struct BrowserProfilesEditor: View {
             }
         }
         .task {
-            names = ChromiumProfiles.names(app.bundleID) ?? [:]
-            model.tracker.setBrowserProfileNames(bundleID: app.bundleID, names)
+            let read = ChromiumProfiles.names(app.bundleID)
+            names = read ?? [:]
+            if read == nil { unreadable.insert(app.bundleID) } else { unreadable.remove(app.bundleID) }
+            model.tracker.setBrowserProfileNames(bundleID: app.bundleID, read)
         }
     }
 }

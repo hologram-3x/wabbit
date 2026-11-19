@@ -14,3 +14,5 @@
 ## Notes
 
 - Done together with 02 (commit "Browser Profiles for Chromium browsers"). "Client with no Open Projects" can only be a Closed Client (the last Project of a Client cannot be closed), so it is covered by the Closed Client case.
+- Review fix: when a browser's profile names can't be read (`Local State` missing or unreadable) the core treats it as having no usable assignments, so normal rules and the app default apply instead of silence; names known but matching none of the title stay silent. The Browser profiles group shows "Can't read this browser's profiles: profiles are ignored until it can."
+- Review fix: once a browser has ≥1 assigned profile (and its names are readable), its Default Project picker is disabled with the caption "Not used: the assigned profiles decide the Project."; it stays active with no assignments or unreadable names.

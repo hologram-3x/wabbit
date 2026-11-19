@@ -36,8 +36,9 @@ extension Tracker {
         }
     }
 
-    /// The browser's profile names (folder → name), as the shell last read them. Not persisted.
-    public func setBrowserProfileNames(bundleID: String, _ names: [String: String]) {
+    /// The browser's profile names (folder → name), as the shell last read them; nil when they can't be read.
+    /// Not persisted.
+    public func setBrowserProfileNames(bundleID: String, _ names: [String: String]?) {
         watched.profileNames[bundleID] = names
     }
 
@@ -51,10 +52,12 @@ extension Tracker {
     }
 
     /// For a browser with at least one assigned profile: `.some(clientId)` when the front window's profile is
-    /// assigned to a Client with Open Projects, `.some(nil)` (no prompt) otherwise. `nil`: no assignments.
+    /// assigned to a Client with Open Projects, `.some(nil)` (no prompt) otherwise. `nil`: no assignments, or
+    /// the profile names are unknown (an unreadable `Local State` must not silence the browser).
     func profileClient(bundleID: String, title: String?) -> Int64?? {
-        guard let assigned = try? browserProfiles(bundleID: bundleID), !assigned.isEmpty else { return nil }
-        let folder = Self.profileFolder(title: title, names: watched.profileNames[bundleID] ?? [:])
+        guard let assigned = try? browserProfiles(bundleID: bundleID), !assigned.isEmpty,
+              let names = watched.profileNames[bundleID] else { return nil }
+        let folder = Self.profileFolder(title: title, names: names)
         guard let clientId = folder.flatMap({ assigned[$0] }), lastUsedProject(clientId: clientId) != nil
         else { return .some(nil) }
         return clientId

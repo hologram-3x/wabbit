@@ -114,6 +114,19 @@ private func prompt(_ h: Harness, _ title: String?, url: String? = nil) -> Int64
     #expect(prompt(s.h, "News - Helium - Kipo") == nil)          // Closed Client
 }
 
+@Test func unreadableProfileNamesLeaveTheBrowserAsIfUnassigned() throws {
+    let s = try setup()
+    try s.h.tracker.setBrowserProfileClient(bundleID: helium, folder: "Profile 1", clientId: s.openCom.id)
+    try s.h.tracker.addTitleRule(bundleID: helium, kind: .contains, text: "admin", projectId: s.admin.id!)
+    // Names unknown (Local State unreadable): normal rules and the default, never silence.
+    s.h.tracker.setBrowserProfileNames(bundleID: helium, nil)
+    #expect(prompt(s.h, "Admin - Helium - OpenCom") == s.admin.id)
+    #expect(prompt(s.h, "News - Helium - OpenCom") == s.shop.id)
+    // Names known but none in the title: still silent.
+    s.h.tracker.setBrowserProfileNames(bundleID: helium, [:])
+    #expect(prompt(s.h, "News - Helium - OpenCom") == nil)
+}
+
 @Test func renamingAProfileKeepsItsAssignment() throws {
     let s = try setup()
     try s.h.tracker.setBrowserProfileClient(bundleID: helium, folder: "Profile 1", clientId: s.openCom.id)

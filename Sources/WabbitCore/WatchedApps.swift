@@ -34,7 +34,8 @@ final class WatchedAppRuntime {
     var signal: (path: String, at: Date)?
     /// Front browser tab's address (normalised), from `.browserAddress`; cleared when the app changes.
     var address: (host: String, path: String)?
-    /// Browser Profile names per browser (folder → name), supplied by the shell; see BrowserProfiles.swift.
+    /// Browser Profile names per browser (folder → name), supplied by the shell; absent while
+    /// unknown. See BrowserProfiles.swift.
     var profileNames: [String: [String: String]] = [:]
     var since = Date.distantPast
     /// "Not now": per app, for `notNowDuration`.
