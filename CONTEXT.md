@@ -33,6 +33,14 @@ _Avoid_: Notification, alert
 An app the freelancer marks as work (e.g. Excel, VS Code, Photoshop). Using it triggers a prompt to start a Session. The Project is chosen by window-title rules, falling back to the app's default Project.
 _Avoid_: Tracked app, monitored app
 
+**Browser Profile**:
+A separate account inside one browser (e.g. the Helium profiles "Nic" and "OpenCom"). A Browser Profile can be assigned to a Client: while it is in use, the Watched App suggests only that Client's Open Projects, ahead of any window-title rule, falling back to the Project last used for that Client. Once a browser has at least one assigned profile, its unassigned profiles, and profiles of a Closed Client, trigger no prompt. Renaming a profile in the browser keeps its assignment.
+_Avoid_: Account, user (and never "Client", which is the person paid)
+
+**Overview**:
+Hours and revenue per Client and Project, shown either for the current month or for all time (a Month / All toggle, opening on Month). Fixed Projects keep their Effective Rate and warnings calculated on all their time, even in the Month view.
+_Avoid_: Dashboard, report
+
 **Idle**:
 A stretch with no input longer than the Idle Threshold (5 min to 1 h, set by the user). When the freelancer returns, they choose to keep, discard or split the idle time. Sessions are never stopped just because it's late.
 _Avoid_: Away, inactive, pause
