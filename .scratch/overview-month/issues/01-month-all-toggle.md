@@ -1,11 +1,13 @@
 # 01: Month / All toggle in the Overview
 
-Status: ready-for-agent
+**What to build:** the Overview opens on the current calendar month and can switch to all time with a Month / All toggle, which replaces the free From/To range. The last choice is remembered. Sessions count in the month they start in; a running Session counts up to now. Fixed Projects keep Effective Rate, % of Estimate and warnings on all their time; only hours and prorated revenue follow the period. See `../spec.md`.
 
-**What to build:** see `../spec.md`.
+**Blocked by:** None (can start immediately)
 
-- [ ] Replace the Date Range toggle and From/To pickers with a Month / All toggle, opening on Month
-- [ ] Month range = start of current calendar month to now, passed to `Tracker.overview(range:)`
-- [ ] Remember the last choice (`@AppStorage`)
-- [ ] Unit test for the current-month range (FakeClock): a Session started last month is excluded, one started on the 1st is included
-- [ ] Needs a human: switch Month / All and check totals; Fixed Project warnings unchanged between the two
+**Status:** ready-for-agent
+
+- [ ] Month / All toggle replaces the Date Range toggle and its From/To pickers; Export keeps its own range
+- [ ] Opens on Month; last choice remembered
+- [ ] Test: a Session started last month is excluded from Month, one started on the 1st is included; All includes both
+- [ ] Test: a Fixed Project's warnings are the same in Month and All
+- [ ] Needs a human: switch Month / All and check the totals

@@ -19,5 +19,5 @@ A Browser Profile (e.g. Helium "OpenCom") can be assigned to a Client, so a brow
 
 ## Out of scope (separate issues)
 
-- Firefox (issue 02), Safari (issue 03).
+- Firefox (issue 04), Safari (issue 05).
 - Incognito / guest windows: untested; treat as unassigned.
