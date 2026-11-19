@@ -6,8 +6,13 @@
 
 **Status:** ready-for-agent
 
-- [ ] Month / All toggle replaces the Date Range toggle and its From/To pickers; Export keeps its own range
-- [ ] Opens on Month; last choice remembered
-- [ ] Test: a Session started last month is excluded from Month, one started on the 1st is included; All includes both
-- [ ] Test: a Fixed Project's warnings are the same in Month and All
+- [x] Month / All toggle replaces the Date Range toggle and its From/To pickers; Export keeps its own range
+- [x] Opens on Month; last choice remembered
+- [x] Test: a Session started last month is excluded from Month, one started on the 1st is included; All includes both
+- [x] Test: a Fixed Project's warnings are the same in Month and All
 - [ ] Needs a human: switch Month / All and check the totals
+
+## Notes
+
+- `Tracker.currentMonthRange(calendar:)` (Money.swift) returns the 1st 00:00 to the next 1st, so a Session started just now still counts; the spec says "to now", equivalent since Sessions never start in the future.
+- Choice stored under `@AppStorage("overviewMonthOnly")`; Export range untouched.

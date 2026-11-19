@@ -68,6 +68,29 @@ import WabbitCore
     #expect(early.seconds == 3600 && early.revenueCents == 6000)
 }
 
+@Test func currentMonthRangeExcludesLastMonthAndKeepsFixedWarnings() throws {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    let h = try Harness()
+    let (_, p) = try h.tracker.createClient(name: "ACME", firstProject: "Site")
+    try h.tracker.setMoney(projectId: p.id!, ProjectMoney(rateCents: 5000, billing: .fixed(priceCents: 200_000, estimatedHours: 10)))
+    h.clock.current = cal.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 22))!  // last month
+    try h.tracker.start(projectId: p.id!)
+    h.clock.advance(by: 3600)
+    try h.tracker.stop()
+    h.clock.current = cal.date(from: DateComponents(year: 2026, month: 11, day: 1))!  // exactly the 1st
+    try h.tracker.start(projectId: p.id!)
+    h.clock.advance(by: 3600)
+    try h.tracker.stop()
+    h.clock.current = cal.date(from: DateComponents(year: 2026, month: 11, day: 19, hour: 12))!
+
+    let month = try h.tracker.overview(range: h.tracker.currentMonthRange(calendar: cal))[0].projects[0]
+    let all = try h.tracker.overview()[0].projects[0]
+    #expect(month.seconds == 3600 && all.seconds == 7200)
+    #expect(month.revenueCents == 100_000 && all.revenueCents == 200_000)
+    #expect(month.percentOfEstimate == all.percentOfEstimate && month.underRate == all.underRate && month.overEstimate == all.overEstimate)
+}
+
 @Test func settingsPersistWithDefaults() throws {
     let h = try Harness()
     #expect(try h.tracker.taxRateBps() == 0 && h.tracker.amountMode() == .gross)

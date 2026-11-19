@@ -6,9 +6,7 @@ struct OverviewView: View {
     let model: TrayModel
     @State private var rows: [Row] = []
     @State private var selection: Row.ID?
-    @State private var useRange = false
-    @State private var from = Calendar.current.date(byAdding: .month, value: -1, to: .now)!
-    @State private var to = Date.now
+    @AppStorage("overviewMonthOnly") private var monthOnly = true
     @State private var editing: Project?
 
     /// A Client (with its Projects as children) or a Project.
@@ -49,22 +47,16 @@ struct OverviewView: View {
         } primaryAction: { ids in editing = project(ids) }
         .navigationSubtitle("\(model.amountMode == .net ? "Net" : "Gross") · Tax \(String(format: "%g", Double(model.taxBps) / 100))%")
         .toolbar {
-            if useRange {
-                ToolbarItemGroup {
-                    DatePicker("From", selection: $from, displayedComponents: .date).labelsHidden()
-                    DatePicker("To", selection: $to, displayedComponents: .date).labelsHidden()
-                }
-                if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
-            }
             ToolbarItem {
-                Toggle(isOn: $useRange) { Label("Date Range", systemImage: "calendar") }
-                    .help("Limit to a date range")
+                Picker("Period", selection: $monthOnly) {
+                    Text("Month").tag(true)
+                    Text("All").tag(false)
+                }
+                .pickerStyle(.segmented)
             }
         }
         .onAppear(perform: load)
-        .onChange(of: useRange) { load() }
-        .onChange(of: from) { load() }
-        .onChange(of: to) { load() }
+        .onChange(of: monthOnly) { load() }
         .sheet(item: $editing) { p in
             MoneyEditor(model: model, project: p) { editing = nil; load() }
         }
@@ -98,8 +90,7 @@ struct OverviewView: View {
 
     private func load() {
         do {
-            let day: TimeInterval = 86_400
-            let range = useRange ? Calendar.current.startOfDay(for: from) ..< Calendar.current.startOfDay(for: to).addingTimeInterval(day) : nil
+            let range = monthOnly ? model.tracker.currentMonthRange() : nil
             rows = try model.tracker.overview(range: range).map { c in
                 Row(id: "c\(c.client.id!)", name: c.client.name, seconds: c.seconds, revenueCents: c.revenueCents,
                     children: c.projects.map {

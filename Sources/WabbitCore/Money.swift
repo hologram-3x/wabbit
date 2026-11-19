@@ -181,6 +181,12 @@ extension Tracker {
 
     // MARK: Overview
 
+    /// The current calendar month (1st 00:00 up to the next 1st; Sessions never start after now), for the Overview's Month view.
+    public func currentMonthRange(calendar: Calendar = .current) -> Range<Date> {
+        let start = calendar.dateInterval(of: .month, for: clock.now())!
+        return start.start ..< start.end
+    }
+
     /// Per Client and Project, Closed ones included. Sessions count when they start in `range` (nil = all time);
     /// a running Session counts up to now.
     /// Defaults: a Fixed price is spread over the range pro rata to hours (so Client totals add up), while
